@@ -5,6 +5,7 @@
 *.swo
 *~
 .DS_Store
+.build-sha
 
 # KataGo files
 katago

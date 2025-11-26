@@ -80,6 +80,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
+
       - name: Check if base image needs rebuild
         id: skip_base
         uses: actions/github-script@v7
@@ -135,10 +138,15 @@ jobs:
           file: Dockerfile.base
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.image.outputs.name }}:base
-          cache-from: type=gha,scope=base
-          cache-to: type=gha,mode=max,scope=base
+          cache-from: |
+            type=gha,scope=base-${{ github.ref_name }}
+            type=gha,scope=base-main
+            type=gha,scope=base
+          cache-to: type=gha,mode=max,scope=base-${{ github.ref_name }}
           platforms: linux/amd64,linux/arm64
           provenance: false
+          build-args: |
+            GIT_SHA=${{ github.sha }}
 
   docker-build:
     name: Build Docker Variant (${{ matrix.variant }})
@@ -162,6 +170,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
 
       - name: Set image name to lowercase
         id: image
@@ -188,10 +199,13 @@ jobs:
           tags: katago-server:test-${{ matrix.variant }}
           platforms: linux/amd64
           cache-from: |
+            type=gha,scope=${{ matrix.variant }}-${{ github.ref_name }}
+            type=gha,scope=${{ matrix.variant }}-main
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ github.ref_name }}
           build-args: |
+            GIT_SHA=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
 
   docker-test:
@@ -207,6 +221,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
 
       - name: Set image name to lowercase
         id: image
@@ -225,8 +242,12 @@ jobs:
           tags: katago-server:test-${{ matrix.variant }}
           platforms: linux/amd64
           cache-from: |
+            type=gha,scope=${{ matrix.variant }}-${{ github.ref_name }}
+            type=gha,scope=${{ matrix.variant }}-main
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
+          build-args: |
+            GIT_SHA=${{ github.sha }}
 
       - name: Create test network
         run: docker network create test-net-${{ matrix.variant }}
@@ -283,15 +304,40 @@ jobs:
 
       - name: Test API endpoint
         run: |
-          docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
+          # Test score endpoint and validate response
+          RESPONSE=$(docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
             curl -f -X POST http://test-container-${{ matrix.variant }}:2718/score/katago_gtp_bot \
             -H "Content-Type: application/json" \
-            -d '{"board_size":19,"moves":["R4","D16"]}' || {
-            echo "ERROR: API endpoint test failed"
+            -d '{"board_size":19,"moves":["R4","D16"],"config":{"ownership":true}}') || {
+            echo "ERROR: API endpoint request failed"
             docker logs test-container-${{ matrix.variant }}
             exit 1
           }
+
+          echo "Response: $RESPONSE"
+
+          # Validate ownership data (should have 361 values for 19x19 board)
+          PROBS_COUNT=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.probs | length')
+          echo "Ownership values count: $PROBS_COUNT (expected: 361)"
+          if [ "$PROBS_COUNT" != "361" ]; then
+            echo "ERROR: Expected 361 ownership values, got $PROBS_COUNT"
+            echo "This indicates the kata-analyze fix is not working properly"
+            docker logs test-container-${{ matrix.variant }}
+            exit 1
+          fi
+
+          # Validate diagnostics are not default values
+          WINPROB=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.diagnostics.winprob')
+          if [ "$WINPROB" = "-1.0" ] || [ "$WINPROB" = "-1" ]; then
+            echo "ERROR: Winprob is still default value (-1.0)"
+            echo "This indicates diagnostics were not updated"
+            docker logs test-container-${{ matrix.variant }}
+            exit 1
+          fi
+
           echo "API test passed ✓"
+          echo "  - Ownership values: $PROBS_COUNT ✓"
+          echo "  - Winprob: $WINPROB ✓"
 
       - name: Cleanup
         if: always()
@@ -325,6 +371,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
 
       - name: Set image name to lowercase
         id: image
@@ -369,11 +418,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
+            type=gha,scope=${{ matrix.variant }}-main
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
           platforms: linux/amd64,linux/arm64
           provenance: false
           build-args: |
+            GIT_SHA=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
 
       - name: Generate artifact attestation

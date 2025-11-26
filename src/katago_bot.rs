@@ -232,6 +232,51 @@ impl KatagoBot {
         .map_err(|_| KatagoError::Timeout(timeout_secs))?
     }
 
+    async fn wait_for_analysis_response(&self, timeout_secs: u64) -> Result<String> {
+        let duration = Duration::from_secs(timeout_secs);
+        let mut collected_lines = Vec::new();
+
+        timeout(duration, async {
+            loop {
+                let mut rx = self.response_rx.lock().await;
+                if let Some(response) = rx.recv().await {
+                    debug!("kata-analyze response line: '{}'", response);
+
+                    // Skip the initial '=' acknowledgment
+                    if response.starts_with('=') {
+                        debug!("Skipping acknowledgment line");
+                        continue;
+                    }
+
+                    // Collect all analysis output lines (info, rootInfo, ownership, etc.)
+                    if response.starts_with("info ")
+                        || response.starts_with("rootInfo ")
+                        || response.starts_with("ownership ")
+                        || response.starts_with("ownershipStdev ")
+                    {
+                        debug!("Collecting analysis line: starts_with info={}, rootInfo={}, ownership={}", 
+                               response.starts_with("info "),
+                               response.starts_with("rootInfo "),
+                               response.starts_with("ownership "));
+                        collected_lines.push(response.clone());
+
+                        // If we got ownership data, we're done
+                        if response.starts_with("ownership ") {
+                            info!("Found ownership line, returning {} collected lines", collected_lines.len());
+                            return Ok(collected_lines.join("\n"));
+                        }
+                    } else {
+                        debug!("Ignoring line that doesn't start with info/rootInfo/ownership: '{}'", response);
+                    }
+                } else {
+                    return Err(KatagoError::ProcessDied);
+                }
+            }
+        })
+        .await
+        .map_err(|_| KatagoError::Timeout(timeout_secs))?
+    }
+
     fn set_rules(&self, komi: f32, config: &RequestConfig) -> Result<()> {
         let rules = if config.client.as_deref() == Some("kifucam") {
             "chinese"
@@ -332,31 +377,65 @@ impl KatagoBot {
         }
 
         // Request ownership analysis
+        // kata-analyze runs continuously until we send 'stop' or another command
         let ownership_flag = if ownership { "true" } else { "false" };
         self.send_command(&format!("kata-analyze 100 ownership {}", ownership_flag))?;
 
-        // Wait for info response
+        // Give KataGo time to analyze (wait ~1 second)
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Send stop command to terminate analysis and get final results
+        self.send_command("stop")?;
+
+        // Now wait for the analysis response with ownership data
         let response = self
-            .wait_for_response(self.config.move_timeout_secs)
+            .wait_for_analysis_response(self.config.move_timeout_secs)
             .await?;
+
+        info!(
+            "Full kata-analyze response ({} bytes): {}",
+            response.len(),
+            response
+        );
 
         // Parse ownership values if requested
         let mut probs = Vec::new();
-        if ownership && response.contains("ownership") {
-            if let Some(ownership_pos) = response.find("ownership") {
-                let ownership_str = &response[ownership_pos + 9..];
-                for token in ownership_str.split_whitespace() {
-                    if let Ok(val) = token.parse::<f32>() {
-                        probs.push(val);
+        if ownership {
+            debug!("Parsing ownership from response: {}", response);
+
+            // Split response into lines and search for ownership data
+            // KataGo outputs ownership as: "ownership <361 floats>"
+            for line in response.lines() {
+                let trimmed = line.trim();
+                if let Some(ownership_str) = trimmed.strip_prefix("ownership ") {
+                    debug!("Found ownership line: {}", line);
+                    debug!("Ownership string to parse: {}", ownership_str);
+
+                    for token in ownership_str.split_whitespace() {
+                        match token.parse::<f32>() {
+                            Ok(val) => probs.push(val),
+                            Err(_) => {
+                                // Stop parsing when we hit non-numeric tokens
+                                debug!("Stopped parsing at non-numeric token: {}", token);
+                                break;
+                            }
+                        }
                     }
+
+                    // Found ownership data, no need to check more lines
+                    break;
                 }
+            }
+
+            if probs.is_empty() {
+                warn!("Response does not contain ownership data: {}", response);
             }
         }
 
-        // Send stop command
-        self.send_command("stop")?;
-
-        info!("Parsed {} ownership values", probs.len());
+        info!(
+            "Parsed {} ownership values from kata-analyze response",
+            probs.len()
+        );
         Ok(probs)
     }
 
