@@ -11,11 +11,12 @@ FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    wget \
-    unzip \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+  ca-certificates \
+  wget \
+  unzip \
+  libgomp1 \
+  libzip5 \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy binary and configs from base image
 COPY --from=binary /app/katago-server /app/
@@ -27,21 +28,21 @@ ARG KATAGO_VERSION=v1.14.1
 ARG CUDA_VERSION=cuda12.1-cudnn8.9.7
 
 RUN set -ex && \
-    # Download KataGo binary and model in parallel
-    wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip & \
-    wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file & \
-    wait && \
-    # Extract and cleanup
-    unzip -q katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
-    chmod +x katago && \
-    rm katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
-    # Create GPU-optimized configs
-    cp config.toml.example config.toml && \
-    cp gtp_config.cfg.example gtp_config.cfg && \
-    sed -i 's/numSearchThreads = 4/numSearchThreads = 8/' gtp_config.cfg && \
-    sed -i 's/maxVisits = 500/maxVisits = 800/' gtp_config.cfg && \
-    sed -i 's/# numNNServerThreadsPerModel = 1/numNNServerThreadsPerModel = 2/' gtp_config.cfg && \
-    sed -i 's/# nnMaxBatchSize = 16/nnMaxBatchSize = 32/' gtp_config.cfg
+  # Download KataGo binary and model in parallel
+  wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip & \
+  wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file & \
+  wait && \
+  # Extract and cleanup
+  unzip -q katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
+  chmod +x katago && \
+  rm katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
+  # Create GPU-optimized configs
+  cp config.toml.example config.toml && \
+  cp gtp_config.cfg.example gtp_config.cfg && \
+  sed -i 's/numSearchThreads = 4/numSearchThreads = 8/' gtp_config.cfg && \
+  sed -i 's/maxVisits = 500/maxVisits = 800/' gtp_config.cfg && \
+  sed -i 's/# numNNServerThreadsPerModel = 1/numNNServerThreadsPerModel = 2/' gtp_config.cfg && \
+  sed -i 's/# nnMaxBatchSize = 16/nnMaxBatchSize = 32/' gtp_config.cfg
 
 EXPOSE 2718
 
