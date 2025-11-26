@@ -8,6 +8,25 @@ HOST="${1:-localhost:2718}"
 echo "Testing KataGo Server at $HOST"
 echo "================================"
 
+# Test 0: Server startup and process health check
+echo -e "\n0. Checking server startup:"
+echo -n "Waiting for server to be ready..."
+TIMEOUT=15
+ELAPSED=0
+while ! curl -s "http://$HOST/health" > /dev/null 2>&1; do
+  if [ $ELAPSED -ge $TIMEOUT ]; then
+    echo " FAILED"
+    echo "ERROR: Server failed to start within $TIMEOUT seconds"
+    echo "This likely means the KataGo process crashed on startup."
+    echo "Check server logs for 'KataGo stdout closed' or stderr errors."
+    exit 1
+  fi
+  sleep 1
+  ELAPSED=$((ELAPSED + 1))
+  echo -n "."
+done
+echo " OK"
+
 # Test 1: Health check
 echo -e "\n1. Health Check:"
 curl -s "http://$HOST/health" | jq '.'

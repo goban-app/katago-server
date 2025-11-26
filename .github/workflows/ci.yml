@@ -218,3 +218,98 @@ jobs:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.meta.outputs.digest }}
           push-to-registry: true
+
+  docker-smoke-test:
+    name: Docker Smoke Test (${{ matrix.variant }})
+    needs: docker-variants
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - variant: cpu
+            suffix: ""
+          - variant: minimal
+            suffix: "-minimal"
+    
+    steps:
+      - name: Set image name to lowercase
+        id: image
+        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: docker pull ${{ steps.image.outputs.name }}:latest${{ matrix.suffix }}
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name test-container-${{ matrix.variant }} \
+            ${{ steps.image.outputs.name }}:latest${{ matrix.suffix }}
+
+      - name: Wait for startup
+        run: sleep 15
+
+      - name: Check container logs
+        run: |
+          echo "=== Container Logs ==="
+          docker logs test-container-${{ matrix.variant }} 2>&1 | tee container.log
+          echo "======================"
+          
+          # Check for successful startup
+          if ! grep -q "Listening on" container.log; then
+            echo "ERROR: Server did not start successfully"
+            exit 1
+          fi
+          
+          # Check if KataGo died immediately (for CPU variant only, minimal doesn't have KataGo)
+          if [ "${{ matrix.variant }}" = "cpu" ]; then
+            if grep -q "KataGo stdout closed" container.log && \
+               [ $(grep -c "KataGo stdout closed" container.log) -lt 3 ]; then
+              # If stdout closed very early, it's likely a crash
+              STARTUP_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
+                grep "Starting KataGo process" | head -1 | cut -d' ' -f1)
+              CLOSED_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
+                grep "KataGo stdout closed" | head -1 | cut -d' ' -f1)
+              
+              echo "WARNING: KataGo process may have crashed on startup"
+              echo "Check stderr logs for errors"
+            fi
+            
+            # Ensure no stderr errors about missing files
+            if grep -qi "no such file" container.log; then
+              echo "ERROR: Missing files detected in logs"
+              exit 1
+            fi
+          fi
+
+      - name: Test health endpoint
+        run: |
+          docker exec test-container-${{ matrix.variant }} \
+            curl -f http://localhost:2718/health || {
+            echo "ERROR: Health check failed"
+            exit 1
+          }
+          echo "Health check passed ✓"
+
+      - name: Test API endpoint (CPU only)
+        if: matrix.variant == 'cpu'
+        run: |
+          docker exec test-container-${{ matrix.variant }} \
+            curl -f -X POST http://localhost:2718/score/katago_gtp_bot \
+            -H "Content-Type: application/json" \
+            -d '{"board_size":19,"moves":["R4","D16"]}' || {
+            echo "ERROR: API endpoint test failed"
+            docker logs test-container-${{ matrix.variant }}
+            exit 1
+          }
+          echo "API test passed ✓"
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f test-container-${{ matrix.variant }} || true
