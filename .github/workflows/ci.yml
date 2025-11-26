@@ -194,10 +194,13 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
+      # Smoke tests only run for CPU variant (minimal requires mounted volumes)
       - name: Create test network
+        if: matrix.variant == 'cpu'
         run: docker network create test-net-${{ matrix.variant }}
 
       - name: Start container
+        if: matrix.variant == 'cpu'
         run: |
           docker run -d \
             --name test-container-${{ matrix.variant }} \
@@ -205,9 +208,11 @@ jobs:
             katago-server:test-${{ matrix.variant }}
 
       - name: Wait for startup
+        if: matrix.variant == 'cpu'
         run: sleep 15
 
       - name: Check container logs
+        if: matrix.variant == 'cpu'
         run: |
           echo "=== Container Logs ==="
           docker logs test-container-${{ matrix.variant }} 2>&1 | tee container.log
@@ -219,28 +224,27 @@ jobs:
             exit 1
           fi
 
-          # Check if KataGo died immediately (for CPU variant only, minimal doesn't have KataGo)
-          if [ "${{ matrix.variant }}" = "cpu" ]; then
-            if grep -q "KataGo stdout closed" container.log && \
-               [ $(grep -c "KataGo stdout closed" container.log) -lt 3 ]; then
-              # If stdout closed very early, it's likely a crash
-              STARTUP_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
-                grep "Starting KataGo process" | head -1 | cut -d' ' -f1)
-              CLOSED_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
-                grep "KataGo stdout closed" | head -1 | cut -d' ' -f1)
+          # Check if KataGo died immediately
+          if grep -q "KataGo stdout closed" container.log && \
+             [ $(grep -c "KataGo stdout closed" container.log) -lt 3 ]; then
+            # If stdout closed very early, it's likely a crash
+            STARTUP_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
+              grep "Starting KataGo process" | head -1 | cut -d' ' -f1)
+            CLOSED_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
+              grep "KataGo stdout closed" | head -1 | cut -d' ' -f1)
 
-              echo "WARNING: KataGo process may have crashed on startup"
-              echo "Check stderr logs for errors"
-            fi
+            echo "WARNING: KataGo process may have crashed on startup"
+            echo "Check stderr logs for errors"
+          fi
 
-            # Ensure no stderr errors about missing files
-            if grep -qi "no such file" container.log; then
-              echo "ERROR: Missing files detected in logs"
-              exit 1
-            fi
+          # Ensure no stderr errors about missing files
+          if grep -qi "no such file" container.log; then
+            echo "ERROR: Missing files detected in logs"
+            exit 1
           fi
 
       - name: Test health endpoint
+        if: matrix.variant == 'cpu'
         run: |
           docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
             curl -f http://test-container-${{ matrix.variant }}:2718/health || {
@@ -249,7 +253,7 @@ jobs:
           }
           echo "Health check passed ✓"
 
-      - name: Test API endpoint (CPU only)
+      - name: Test API endpoint
         if: matrix.variant == 'cpu'
         run: |
           docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
@@ -263,7 +267,7 @@ jobs:
           echo "API test passed ✓"
 
       - name: Cleanup
-        if: always()
+        if: always() && matrix.variant == 'cpu'
         run: |
           docker rm -f test-container-${{ matrix.variant }} || true
           docker network rm test-net-${{ matrix.variant }} || true
