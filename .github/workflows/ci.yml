@@ -141,12 +141,12 @@ jobs:
           provenance: false
 
   docker-build:
-    name: Build Docker Variants (No Push)
+    name: Build Docker Variant (${{ matrix.variant }})
     needs: docker-base
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    
+
     strategy:
       matrix:
         include:
@@ -178,34 +178,15 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          flavor: |
-            suffix=${{ matrix.suffix }},onlatest=true
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-          labels: |
-            org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
-            org.opencontainers.image.description=${{ matrix.description }}
-
-      - name: Build Docker image (no push)
+      - name: Build Docker image for testing (amd64 only)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           push: false
           load: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: katago-server:test-${{ matrix.variant }}
+          platforms: linux/amd64
           cache-from: |
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
@@ -213,8 +194,8 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
-  docker-smoke-test:
-    name: Docker Smoke Test (${{ matrix.variant }})
+  docker-test:
+    name: Smoke Test (${{ matrix.variant }})
     needs: docker-build
     runs-on: ubuntu-latest
     strategy:
@@ -222,8 +203,7 @@ jobs:
         include:
           - variant: cpu
             dockerfile: Dockerfile
-            suffix: ""
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -235,23 +215,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.image.outputs.name }}
-          flavor: |
-            suffix=${{ matrix.suffix }},onlatest=true
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build Docker image for testing
+      - name: Build Docker image from cache
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -259,12 +223,10 @@ jobs:
           push: false
           load: true
           tags: katago-server:test-${{ matrix.variant }}
+          platforms: linux/amd64
           cache-from: |
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
-
 
       - name: Create test network
         run: docker network create test-net-${{ matrix.variant }}
@@ -284,34 +246,31 @@ jobs:
           echo "=== Container Logs ==="
           docker logs test-container-${{ matrix.variant }} 2>&1 | tee container.log
           echo "======================"
-          
+
           # Check for successful startup
           if ! grep -q "Listening on" container.log; then
             echo "ERROR: Server did not start successfully"
             exit 1
           fi
-          
-          # Check if KataGo died immediately (for CPU variant only, minimal doesn't have KataGo)
-          if [ "${{ matrix.variant }}" = "cpu" ]; then
-            if grep -q "KataGo stdout closed" container.log && \
-               [ $(grep -c "KataGo stdout closed" container.log) -lt 3 ]; then
-              # If stdout closed very early, it's likely a crash
-              STARTUP_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
-                grep "Starting KataGo process" | head -1 | cut -d' ' -f1)
-              CLOSED_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
-                grep "KataGo stdout closed" | head -1 | cut -d' ' -f1)
-              
-              echo "WARNING: KataGo process may have crashed on startup"
-              echo "Check stderr logs for errors"
-            fi
-            
-            # Ensure no stderr errors about missing files
-            if grep -qi "no such file" container.log; then
-              echo "ERROR: Missing files detected in logs"
-              exit 1
-            fi
+
+          # Check if KataGo died immediately
+          if grep -q "KataGo stdout closed" container.log && \
+             [ $(grep -c "KataGo stdout closed" container.log) -lt 3 ]; then
+            # If stdout closed very early, it's likely a crash
+            STARTUP_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
+              grep "Starting KataGo process" | head -1 | cut -d' ' -f1)
+            CLOSED_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
+              grep "KataGo stdout closed" | head -1 | cut -d' ' -f1)
+
+            echo "WARNING: KataGo process may have crashed on startup"
+            echo "Check stderr logs for errors"
           fi
 
+          # Ensure no stderr errors about missing files
+          if grep -qi "no such file" container.log; then
+            echo "ERROR: Missing files detected in logs"
+            exit 1
+          fi
 
       - name: Test health endpoint
         run: |
@@ -322,9 +281,7 @@ jobs:
           }
           echo "Health check passed ✓"
 
-
-      - name: Test API endpoint (CPU only)
-        if: matrix.variant == 'cpu'
+      - name: Test API endpoint
         run: |
           docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
             curl -f -X POST http://test-container-${{ matrix.variant }}:2718/score/katago_gtp_bot \
@@ -344,7 +301,7 @@ jobs:
 
   docker-publish:
     name: Publish Docker Image (${{ matrix.variant }})
-    needs: docker-smoke-test
+    needs: [docker-build, docker-test]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -352,7 +309,7 @@ jobs:
       packages: write
       attestations: write
       id-token: write
-    
+
     strategy:
       matrix:
         include:
@@ -402,7 +359,7 @@ jobs:
             org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
             org.opencontainers.image.description=${{ matrix.description }}
 
-      - name: Build and push Docker image
+      - name: Build and push multi-platform Docker image
         id: push
         uses: docker/build-push-action@v5
         with:

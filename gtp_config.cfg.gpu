@@ -1,28 +1,20 @@
-# Basic GTP configuration for KataGo
-# Adjust these settings based on your hardware capabilities
+# GTP configuration for KataGo - GPU optimized
+# Optimized for CUDA GPU operation with higher throughput
 
 # === Search Settings ===
-# Number of threads to use for the search
-numSearchThreads = 4
+# More threads for GPU efficiency
+numSearchThreads = 8
 
-# Maximum number of visits during search
-maxVisits = 500
+# More visits for stronger play with GPU acceleration
+maxVisits = 800
 
 # Don't ponder (think during opponent's turn) - better for server usage
 ponderingEnabled = false
 
 # === Neural Network Settings ===
-# Number of threads per model for neural network evaluation
-# Increase for better throughput on multi-core systems
-numNNServerThreadsPerModel = 1
-
-# Batch size for neural network evaluation
-# Larger = more efficient GPU usage but more memory
-nnMaxBatchSize = 16
-
-# For CPU-only operation (no GPU), use these instead:
-# numNNServerThreadsPerModel = 2
-# nnMaxBatchSize = 8
+# GPU-optimized settings for better throughput
+numNNServerThreadsPerModel = 2
+nnMaxBatchSize = 32
 
 # === Rules Settings ===
 rules = chinese
