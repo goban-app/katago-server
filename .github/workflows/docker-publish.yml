@@ -24,6 +24,22 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    
+    strategy:
+      matrix:
+        include:
+          - variant: cpu
+            dockerfile: Dockerfile
+            suffix: ""
+            description: "CPU-only with 18-block model"
+          - variant: gpu
+            dockerfile: Dockerfile.gpu
+            suffix: "-gpu"
+            description: "GPU-enabled with 40-block model"
+          - variant: minimal
+            dockerfile: Dockerfile.minimal
+            suffix: "-minimal"
+            description: "Minimal - bring your own model"
 
     steps:
       - name: Checkout repository
@@ -45,6 +61,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -53,16 +71,20 @@ jobs:
             type=semver,pattern={{major}}
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+          labels: |
+            org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
+            org.opencontainers.image.description=${{ matrix.description }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
           platforms: linux/amd64,linux/arm64
 
       - name: Generate artifact attestation

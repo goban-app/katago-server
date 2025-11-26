@@ -26,11 +26,18 @@ A high-performance REST API server for KataGo, written in Rust using Axum. This 
 The easiest way to get started is using the pre-built Docker image:
 
 ```bash
+# CPU version (recommended for getting started)
 docker pull ghcr.io/stubbi/katago-server:latest
 docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
+
+# GPU version (requires NVIDIA GPU and nvidia-docker)
+docker pull ghcr.io/stubbi/katago-server:latest-gpu
+docker run --gpus all -p 2718:2718 ghcr.io/stubbi/katago-server:latest-gpu
 ```
 
 The server will be available at `http://localhost:2718`.
+
+See the [Docker Image](#docker-image) section for more variants and configuration options.
 
 ### 1. Clone the Repository
 
@@ -427,21 +434,164 @@ This project is provided as-is for educational and production use. Please ensure
 
 ## Docker Image
 
-Pre-built Docker images are automatically published to GitHub Container Registry on every commit:
+Pre-built Docker images are automatically published to GitHub Container Registry with three variants:
+
+### Image Variants
+
+#### 1. CPU (Default) - `latest`
+**Best for**: Testing, development, moderate usage
+- **Model**: 18-block network (~200MB) - `kata1-b18c384nbt-s9131461376-d4087399203.bin.gz`
+- **Performance**: ~100-200 playouts, good for casual play
+- **Requirements**: Any x86_64 or ARM64 system
+- **Memory**: ~500MB RAM
 
 ```bash
-# Latest version
 docker pull ghcr.io/stubbi/katago-server:latest
+docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
+```
 
-# Specific version
-docker pull ghcr.io/stubbi/katago-server:v1.0.0
+#### 2. GPU - `latest-gpu`
+**Best for**: Production, high-performance analysis
+- **Model**: 40-block network (~500MB) - `kata1-b40c256-s11840935168-d2898845681.bin.gz`
+- **Performance**: ~800+ playouts, professional strength
+- **Requirements**: NVIDIA GPU with CUDA 12.2+, nvidia-docker
+- **Memory**: ~2GB RAM + 4GB VRAM
 
-# Run with custom config
+```bash
+docker pull ghcr.io/stubbi/katago-server:latest-gpu
+docker run --gpus all -p 2718:2718 ghcr.io/stubbi/katago-server:latest-gpu
+```
+
+#### 3. Minimal - `latest-minimal`
+**Best for**: Custom configurations, different models
+- **Model**: None (mount your own)
+- **Performance**: Depends on your model
+- **Requirements**: Mount `/models` directory with katago, model, and config
+
+```bash
+docker pull ghcr.io/stubbi/katago-server:latest-minimal
 docker run -p 2718:2718 \
-  -v $(pwd)/config.toml:/app/config.toml:ro \
+  -v /path/to/models:/models:ro \
+  ghcr.io/stubbi/katago-server:latest-minimal
+```
+
+### Usage Examples
+
+**Quick Start (CPU)**:
+```bash
+docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
+# Server available at http://localhost:2718
+```
+
+**GPU with Custom Config**:
+```bash
+docker run --gpus all -p 2718:2718 \
   -v $(pwd)/gtp_config.cfg:/app/gtp_config.cfg:ro \
+  ghcr.io/stubbi/katago-server:latest-gpu
+```
+
+**Custom Model (Minimal)**:
+```bash
+# Your directory structure:
+# /my-models/
+#   ├── katago (binary)
+#   ├── my-custom-model.bin.gz
+#   └── gtp_config.cfg
+
+docker run -p 2718:2718 \
+  -v /my-models:/models:ro \
+  ghcr.io/stubbi/katago-server:latest-minimal
+```
+
+**Override Environment Variables**:
+```bash
+docker run -p 2718:2718 \
+  -e RUST_LOG=debug \
+  -e KATAGO_SERVER__HOST=0.0.0.0 \
+  -e KATAGO_SERVER__PORT=2718 \
   ghcr.io/stubbi/katago-server:latest
 ```
+
+### Docker Compose
+
+```yaml
+version: '3.8'
+services:
+  katago-cpu:
+    image: ghcr.io/stubbi/katago-server:latest
+    ports:
+      - "2718:2718"
+    environment:
+      - RUST_LOG=info
+    restart: unless-stopped
+
+  katago-gpu:
+    image: ghcr.io/stubbi/katago-server:latest-gpu
+    ports:
+      - "2719:2718"
+    runtime: nvidia
+    environment:
+      - RUST_LOG=info
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+```
+
+### Building Custom Images
+
+You can build your own image with a different model:
+
+```bash
+# Build with specific model
+docker build -t my-katago-server \
+  --build-arg MODEL_NAME=kata1-b10c128-s*.bin.gz \
+  .
+
+# Build GPU version
+docker build -f Dockerfile.gpu -t my-katago-server:gpu .
+
+# Build minimal version
+docker build -f Dockerfile.minimal -t my-katago-server:minimal .
+```
+
+### Mounting Custom Models
+
+All variants support mounting custom models and configurations:
+
+```bash
+docker run -p 2718:2718 \
+  -v $(pwd)/my-model.bin.gz:/app/my-model.bin.gz:ro \
+  -v $(pwd)/my-config.cfg:/app/gtp_config.cfg:ro \
+  -v $(pwd)/config.toml:/app/config.toml:ro \
+  ghcr.io/stubbi/katago-server:latest
+```
+
+Then update `config.toml` to point to `/app/my-model.bin.gz`.
+
+### CPU vs GPU Configuration
+
+**CPU Configuration** (`gtp_config.cfg`):
+```ini
+numSearchThreads = 2
+maxVisits = 200
+numNNServerThreadsPerModel = 2
+nnMaxBatchSize = 8
+```
+
+**GPU Configuration** (`gtp_config.cfg`):
+```ini
+numSearchThreads = 8
+maxVisits = 800
+numNNServerThreadsPerModel = 2
+nnMaxBatchSize = 32
+```
+
+### Available Tags
+
+- `latest` / `latest-cpu` - CPU version with 18-block model
+- `latest-gpu` - GPU version with 40-block model  
+- `latest-minimal` - No bundled model, mount your own
+- `v1.0.0`, `v1.0`, `v1` - Semantic version tags (all variants)
+- `main` - Latest main branch build
 
 ## Contributing
 

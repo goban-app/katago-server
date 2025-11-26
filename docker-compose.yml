@@ -1,20 +1,59 @@
 version: '3.8'
 
 services:
-  katago-server:
-    build: .
+  # CPU version - good for testing and moderate usage
+  katago-server-cpu:
+    image: ghcr.io/stubbi/katago-server:latest
+    # Or build locally:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     ports:
       - "2718:2718"
-    volumes:
-      # Mount custom config if needed
-      - ./config.toml:/app/config.toml:ro
-      - ./gtp_config.cfg:/app/gtp_config.cfg:ro
+    # Uncomment to mount custom config:
+    # volumes:
+    #   - ./config.toml:/app/config.toml:ro
+    #   - ./gtp_config.cfg:/app/gtp_config.cfg:ro
     environment:
       - RUST_LOG=info
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2718/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2718/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # GPU version - requires nvidia-docker
+  # Uncomment to use GPU-accelerated version
+  # katago-server-gpu:
+  #   image: ghcr.io/stubbi/katago-server:latest-gpu
+  #   # Or build locally:
+  #   # build:
+  #   #   context: .
+  #   #   dockerfile: Dockerfile.gpu
+  #   ports:
+  #     - "2719:2718"
+  #   runtime: nvidia
+  #   environment:
+  #     - RUST_LOG=info
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2718/health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 10s
+
+  # Minimal version with custom model
+  # Uncomment and configure to use your own models
+  # katago-server-custom:
+  #   image: ghcr.io/stubbi/katago-server:latest-minimal
+  #   ports:
+  #     - "2720:2718"
+  #   volumes:
+  #     - /path/to/your/models:/models:ro
+  #   environment:
+  #     - RUST_LOG=info
+  #   restart: unless-stopped
