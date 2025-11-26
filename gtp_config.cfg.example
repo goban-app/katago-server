@@ -50,3 +50,4 @@ reportAnalysisWinratesAs = SIDETOMOVE
 logSearchInfo = false
 logMoves = false
 logGtp = true
+logAllGTPCommunication = false
