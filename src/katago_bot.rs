@@ -240,10 +240,11 @@ impl KatagoBot {
             loop {
                 let mut rx = self.response_rx.lock().await;
                 if let Some(response) = rx.recv().await {
-                    debug!("Received response for analysis: {}", response);
+                    debug!("kata-analyze response line: '{}'", response);
 
                     // Skip the initial '=' acknowledgment
                     if response.starts_with('=') {
+                        debug!("Skipping acknowledgment line");
                         continue;
                     }
 
@@ -253,12 +254,19 @@ impl KatagoBot {
                         || response.starts_with("ownership ")
                         || response.starts_with("ownershipStdev ")
                     {
+                        debug!("Collecting analysis line: starts_with info={}, rootInfo={}, ownership={}", 
+                               response.starts_with("info "),
+                               response.starts_with("rootInfo "),
+                               response.starts_with("ownership "));
                         collected_lines.push(response.clone());
 
                         // If we got ownership data, we're done
                         if response.starts_with("ownership ") {
+                            info!("Found ownership line, returning {} collected lines", collected_lines.len());
                             return Ok(collected_lines.join("\n"));
                         }
+                    } else {
+                        debug!("Ignoring line that doesn't start with info/rootInfo/ownership: '{}'", response);
                     }
                 } else {
                     return Err(KatagoError::ProcessDied);
@@ -376,6 +384,12 @@ impl KatagoBot {
         let response = self
             .wait_for_analysis_response(self.config.move_timeout_secs)
             .await?;
+
+        info!(
+            "Full kata-analyze response ({} bytes): {}",
+            response.len(),
+            response
+        );
 
         // Parse ownership values if requested
         let mut probs = Vec::new();
