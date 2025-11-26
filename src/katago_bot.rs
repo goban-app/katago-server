@@ -261,7 +261,7 @@ impl KatagoBot {
                         collected_lines.push(response.clone());
 
                         // If we got ownership data, we're done
-                        if response.starts_with("ownership ") {
+                        if response.contains("ownership ") {
                             info!("Found ownership line, returning {} collected lines", collected_lines.len());
                             return Ok(collected_lines.join("\n"));
                         }
