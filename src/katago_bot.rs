@@ -10,13 +10,17 @@ use tokio::sync::{mpsc, Mutex as TokioMutex};
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
-static WINRATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Winrate\s+([^\s]+)\s+").unwrap());
-static SCORELEAD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"ScoreLead\s+([^\s]+)\s+").unwrap());
+static WINRATE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Winrate\s+([^\s]+)\s+").unwrap());
+static SCORELEAD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"ScoreLead\s+([^\s]+)\s+").unwrap());
 static MOVE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+move\s+([^\s]+)\s+").unwrap());
 static PSV_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"PSV\s+([^\s]+)\s+").unwrap());
 static MOVE_CANDIDATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([^\s]+)\s+:").unwrap());
-static INFO_WINRATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"winrate\s+([^\s]+)\s+").unwrap());
-static INFO_SCORELEAD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"scoreLead\s+([^\s]+)\s+").unwrap());
+static INFO_WINRATE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"winrate\s+([^\s]+)\s+").unwrap());
+static INFO_SCORELEAD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"scoreLead\s+([^\s]+)\s+").unwrap());
 
 #[derive(Debug, Clone)]
 pub struct MoveCandidate {

@@ -52,7 +52,7 @@ impl Config {
 
     pub fn from_env() -> anyhow::Result<Self> {
         let mut config = Config::default();
-        
+
         if let Ok(host) = std::env::var("KATAGO_SERVER_HOST") {
             config.server.host = host;
         }
@@ -71,7 +71,7 @@ impl Config {
         if let Ok(timeout) = std::env::var("KATAGO_MOVE_TIMEOUT_SECS") {
             config.katago.move_timeout_secs = timeout.parse()?;
         }
-        
+
         Ok(config)
     }
 }
