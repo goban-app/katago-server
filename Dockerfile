@@ -52,7 +52,7 @@ RUN chmod +x docker-setup.sh && ./docker-setup.sh
 
 EXPOSE 2718
 
-ENV RUST_LOG=info
+ENV RUST_LOG=debug
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \

@@ -48,7 +48,7 @@ COPY config.toml.example /app/config.toml.example
 COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 
 EXPOSE 2718
-ENV RUST_LOG=info
+ENV RUST_LOG=debug
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:2718/health || exit 1
