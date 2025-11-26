@@ -8,6 +8,9 @@ target/
 **/*.rs.bk
 *.pdb
 
+# Keep Cargo.lock for Docker builds
+# Cargo.lock
+
 # IDE
 .vscode/
 .idea/
