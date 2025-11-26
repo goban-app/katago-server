@@ -26,10 +26,6 @@ nnMaxBatchSize = 16
 
 # === Rules Settings ===
 rules = chinese
-koRule = POSITIONAL
-scoringRule = AREA
-taxRule = NONE
-multiStoneSuicideLegal = false
 
 # === Analysis Settings ===
 # Reduce noise for more consistent analysis
