@@ -405,8 +405,11 @@ impl KatagoBot {
 
             if let Some(ownership_pos) = response.find("ownership") {
                 let ownership_str = &response[ownership_pos + 9..];
-                debug!("Found ownership keyword. Parsing string starting with: {:.50}...", ownership_str);
-                
+                debug!(
+                    "Found ownership keyword. Parsing string starting with: {:.50}...",
+                    ownership_str
+                );
+
                 for token in ownership_str.split_whitespace() {
                     if let Ok(val) = token.parse::<f32>() {
                         probs.push(val);
