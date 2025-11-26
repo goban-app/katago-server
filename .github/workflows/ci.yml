@@ -142,6 +142,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=base-${{ github.ref_name }}
           platforms: linux/amd64,linux/arm64
           provenance: false
+          build-args: |
+            GIT_SHA=${{ github.sha }}
 
   docker-build:
     name: Build Docker Variant (${{ matrix.variant }})
@@ -197,6 +199,7 @@ jobs:
             type=registry,ref=${{ steps.image.outputs.name }}:base
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ github.ref_name }}
           build-args: |
+            GIT_SHA=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
 
   docker-test:
@@ -234,6 +237,8 @@ jobs:
             type=gha,scope=${{ matrix.variant }}-main
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
+          build-args: |
+            GIT_SHA=${{ github.sha }}
 
       - name: Create test network
         run: docker network create test-net-${{ matrix.variant }}
@@ -407,6 +412,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: false
           build-args: |
+            GIT_SHA=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
 
       - name: Generate artifact attestation

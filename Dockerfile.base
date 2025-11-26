@@ -18,6 +18,10 @@ RUN mkdir src && \
     cargo build --release && \
     rm -rf src
 
+# Cache invalidation: forces rebuild when commit changes
+ARG GIT_SHA=unknown
+RUN echo "Building from commit: $GIT_SHA"
+
 # Copy source code
 COPY src ./src
 
