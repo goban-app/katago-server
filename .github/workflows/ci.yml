@@ -154,6 +154,10 @@ jobs:
             dockerfile: Dockerfile
             suffix: ""
             description: "CPU-only with 18-block model"
+          - variant: gpu
+            dockerfile: Dockerfile.gpu
+            suffix: "-gpu"
+            description: "GPU-enabled with 28-block model"
           - variant: minimal
             dockerfile: Dockerfile.minimal
             suffix: "-minimal"
@@ -317,6 +321,10 @@ jobs:
             dockerfile: Dockerfile
             suffix: ""
             description: "CPU-only with 18-block model"
+          - variant: gpu
+            dockerfile: Dockerfile.gpu
+            suffix: "-gpu"
+            description: "GPU-enabled with 28-block model"
           - variant: minimal
             dockerfile: Dockerfile.minimal
             suffix: "-minimal"
