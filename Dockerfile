@@ -5,11 +5,14 @@
 FROM ghcr.io/stubbi/katago-server:base AS runtime-base
 
 # Install wget and unzip for downloading KataGo
-RUN apt-get update && apt-get install -y \
-  wget \
+RUN apt-get update && apt-get install -y    wget \
   unzip \
-  libzip5 \
   && rm -rf /var/lib/apt/lists/*
+
+# Install libzip5 manually (required by KataGo, only available in older Ubuntu)
+RUN wget http://archive.ubuntu.com/ubuntu/pool/universe/libz/libzip/libzip5_1.5.1-0ubuntu1_amd64.deb && \
+  apt-get install -y ./libzip5_1.5.1-0ubuntu1_amd64.deb && \
+  rm libzip5_1.5.1-0ubuntu1_amd64.deb
 
 # Download KataGo and model in parallel, then configure
 # Default: CPU-only version (eigen build for broad compatibility)
