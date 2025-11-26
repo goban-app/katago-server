@@ -18,9 +18,10 @@ RUN mkdir src && \
     cargo build --release && \
     rm -rf src
 
-# Cache invalidation: forces rebuild when commit changes
-ARG GIT_SHA=unknown
-RUN echo "Building from commit: $GIT_SHA"
+# Cache invalidation: copy build SHA file (changes with every commit)
+# This file is created in CI and contains the git commit SHA
+# Docker will invalidate cache when this file changes
+COPY .build-sha ./
 
 # Copy source code
 COPY src ./src

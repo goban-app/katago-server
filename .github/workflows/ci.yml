@@ -80,6 +80,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
+
       - name: Check if base image needs rebuild
         id: skip_base
         uses: actions/github-script@v7
@@ -168,6 +171,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
+
       - name: Set image name to lowercase
         id: image
         run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
@@ -215,6 +221,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
 
       - name: Set image name to lowercase
         id: image
@@ -362,6 +371,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create build info file to bust Docker cache
+        run: echo "build_sha=${{ github.sha }}" > .build-sha
 
       - name: Set image name to lowercase
         id: image
