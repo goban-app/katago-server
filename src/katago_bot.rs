@@ -403,10 +403,22 @@ impl KatagoBot {
         if ownership {
             debug!("Parsing ownership from response: {}", response);
 
-            // KataGo outputs ownership as: "ownership <361 floats>"
-                    // Found ownership data, no need to check more lines
-                    break;
+            if let Some(ownership_pos) = response.find("ownership") {
+                let ownership_str = &response[ownership_pos + 9..];
+                debug!("Found ownership keyword. Parsing string starting with: {:.50}...", ownership_str);
+                
+                for token in ownership_str.split_whitespace() {
+                    if let Ok(val) = token.parse::<f32>() {
+                        probs.push(val);
+                    } else {
+                        // Log the first few failures to see what's wrong
+                        if probs.len() < 5 {
+                            debug!("Failed to parse token as f32: '{}'", token);
+                        }
+                    }
                 }
+            } else {
+                warn!("'ownership' keyword not found in response");
             }
 
             if probs.is_empty() {
