@@ -85,9 +85,13 @@ HTTP Response
 ### Concurrency Model
 
 - **Async/await**: Uses Tokio runtime for efficient I/O
-- **Channels**: mpsc channels for process communication
-- **Mutexes**: Protect shared state (diagnostics, process handles)
-- **Thread spawning**: Separate thread reads KataGo stdout
+- **Channels**: mpsc unbounded channels for process communication
+- **Mutex Strategy**:
+  - `tokio::sync::Mutex` for async-accessed data (response_rx, last_move_color)
+  - `std::sync::Mutex` for sync-only data (stdin, process handles)
+  - `std::sync::RwLock` for diagnostics (written from thread, read from async)
+- **Thread spawning**: Separate thread reads KataGo stdout continuously
+- **LazyLock**: Static regex patterns initialized once (Rust 1.80+)
 
 ### Key Design Decisions
 
@@ -96,21 +100,26 @@ HTTP Response
    - Sufficient for moderate load
    - Can scale by running multiple server instances
 
-2. **Arc<Mutex<T>>**: Shared ownership with interior mutability
-   - Safe concurrent access to bot state
-   - Trade-off: some lock contention under high load
+2. **Smart Mutex Usage**: Different mutex types for different access patterns
+   - `tokio::sync::Mutex`: For data accessed in async contexts with `.await`
+   - `std::sync::Mutex`: For sync-only access (better performance)
+   - `std::sync::RwLock`: For frequent reads, infrequent writes (diagnostics)
+   - Eliminates `Send` trait issues across `.await` boundaries
 
-3. **Regex Parsing**: Extract data from KataGo text responses
-   - Lazy static compilation for performance
-   - Robust against format variations
+3. **Regex Compilation**: Static lazy initialization with LazyLock
+   - Compiled once at first use (Rust 1.80+ feature)
+   - No runtime overhead from lazy_static crate
+   - Better performance than compiling per-request
 
-4. **Process Supervision**: Auto-restart on death
-   - Handles crashes gracefully
+4. **Process Supervision**: Managed child process lifecycle
+   - Clean shutdown on server termination
+   - Timeout handling for hung processes
    - Logs errors for debugging
 
-5. **Timeouts**: Configurable per-move timeout
-   - Prevents infinite hangs
-   - Returns error on timeout
+5. **Minimal Dependencies**: Direct TOML parsing instead of config crate
+   - Fewer transitive dependencies
+   - Faster compilation
+   - Zero duplicate dependencies in tree
 
 ## API Contract
 
