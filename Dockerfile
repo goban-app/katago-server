@@ -31,11 +31,11 @@ ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-  wget \
-  libzip4 \
-  libgomp1 \
-  && rm -rf /var/lib/apt/lists/*
+RUN set -ex; \
+  apt-get update; \
+  if apt-get install -y --no-install-recommends libzip5; then :; else apt-get install -y --no-install-recommends libzip4; ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; fi; \
+  apt-get install -y --no-install-recommends wget libgomp1; \
+  rm -rf /var/lib/apt/lists/*
 
 # Copy compiled binary
 COPY --from=katago-builder /build/KataGo/cpp/katago /app/katago
