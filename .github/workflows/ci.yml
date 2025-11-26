@@ -141,7 +141,7 @@ jobs:
           provenance: false
 
   docker-build:
-    name: Build Docker Variants for Testing (${{ matrix.variant }})
+    name: Build Docker Variant (${{ matrix.variant }})
     needs: docker-base
     runs-on: ubuntu-latest
     permissions:
@@ -194,13 +194,44 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
-      # Smoke tests only run for CPU variant (minimal requires mounted volumes)
+  docker-test:
+    name: Smoke Test (${{ matrix.variant }})
+    needs: docker-build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - variant: cpu
+            dockerfile: Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image name to lowercase
+        id: image
+        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image from cache
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: false
+          load: true
+          tags: katago-server:test-${{ matrix.variant }}
+          platforms: linux/amd64
+          cache-from: |
+            type=gha,scope=${{ matrix.variant }}
+            type=registry,ref=${{ steps.image.outputs.name }}:base
+
       - name: Create test network
-        if: matrix.variant == 'cpu'
         run: docker network create test-net-${{ matrix.variant }}
 
       - name: Start container
-        if: matrix.variant == 'cpu'
         run: |
           docker run -d \
             --name test-container-${{ matrix.variant }} \
@@ -208,11 +239,9 @@ jobs:
             katago-server:test-${{ matrix.variant }}
 
       - name: Wait for startup
-        if: matrix.variant == 'cpu'
         run: sleep 15
 
       - name: Check container logs
-        if: matrix.variant == 'cpu'
         run: |
           echo "=== Container Logs ==="
           docker logs test-container-${{ matrix.variant }} 2>&1 | tee container.log
@@ -244,7 +273,6 @@ jobs:
           fi
 
       - name: Test health endpoint
-        if: matrix.variant == 'cpu'
         run: |
           docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
             curl -f http://test-container-${{ matrix.variant }}:2718/health || {
@@ -254,7 +282,6 @@ jobs:
           echo "Health check passed ✓"
 
       - name: Test API endpoint
-        if: matrix.variant == 'cpu'
         run: |
           docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
             curl -f -X POST http://test-container-${{ matrix.variant }}:2718/score/katago_gtp_bot \
@@ -267,14 +294,14 @@ jobs:
           echo "API test passed ✓"
 
       - name: Cleanup
-        if: always() && matrix.variant == 'cpu'
+        if: always()
         run: |
           docker rm -f test-container-${{ matrix.variant }} || true
           docker network rm test-net-${{ matrix.variant }} || true
 
   docker-publish:
     name: Publish Docker Image (${{ matrix.variant }})
-    needs: docker-build
+    needs: [docker-build, docker-test]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
