@@ -379,7 +379,7 @@ impl KatagoBot {
         // Request ownership analysis
         // kata-analyze runs continuously until we send 'stop' or another command
         let ownership_flag = if ownership { "true" } else { "false" };
-        self.send_command(&format!("kata-analyze 100 ownership {}", ownership_flag))?;
+        self.send_command(&format!("kata-analyze 10 ownership {}", ownership_flag))?;
 
         // Give KataGo time to analyze (wait ~1 second)
         tokio::time::sleep(Duration::from_secs(1)).await;
