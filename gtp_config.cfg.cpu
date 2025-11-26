@@ -36,6 +36,4 @@ reportAnalysisWinratesAs = SIDETOMOVE
 # === Logging ===
 # Control log level (can be: error, warning, info, debug)
 logSearchInfo = false
-logMoves = false
-logGtp = true
 logAllGTPCommunication = false
