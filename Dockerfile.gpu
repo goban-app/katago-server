@@ -69,6 +69,8 @@ RUN set -ex && \
   sed -i 's/maxVisits = 500/maxVisits = 800/' gtp_config.cfg && \
   sed -i 's/# numNNServerThreadsPerModel = 1/numNNServerThreadsPerModel = 2/' gtp_config.cfg && \
   sed -i 's/# nnMaxBatchSize = 16/nnMaxBatchSize = 32/' gtp_config.cfg && \
+  # Füge logAllGTPCommunication = false hinzu, falls nicht vorhanden
+  grep -q '^logAllGTPCommunication' gtp_config.cfg || echo 'logAllGTPCommunication = false' >> gtp_config.cfg && \
   sed -i "s|model_path = \".*\"|model_path = \"./$KATAGO_MODEL\"|" config.toml
 
 EXPOSE 2718

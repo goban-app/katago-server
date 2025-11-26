@@ -49,6 +49,8 @@ RUN set -ex && \
   cp gtp_config.cfg.example gtp_config.cfg && \
   sed -i 's/numSearchThreads = 4/numSearchThreads = 2/' gtp_config.cfg && \
   sed -i 's/maxVisits = 500/maxVisits = 200/' gtp_config.cfg && \
+  # Füge logAllGTPCommunication = false hinzu, falls nicht vorhanden
+  grep -q '^logAllGTPCommunication' gtp_config.cfg || echo 'logAllGTPCommunication = false' >> gtp_config.cfg && \
   # Fix model path in config to match downloaded filename
   sed -i "s|model_path = \".*\"|model_path = \"./$KATAGO_MODEL\"|" config.toml
 
