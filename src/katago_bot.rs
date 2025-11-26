@@ -403,25 +403,7 @@ impl KatagoBot {
         if ownership {
             debug!("Parsing ownership from response: {}", response);
 
-            // Split response into lines and search for ownership data
             // KataGo outputs ownership as: "ownership <361 floats>"
-            for line in response.lines() {
-                let trimmed = line.trim();
-                if let Some(ownership_str) = trimmed.strip_prefix("ownership ") {
-                    debug!("Found ownership line: {}", line);
-                    debug!("Ownership string to parse: {}", ownership_str);
-
-                    for token in ownership_str.split_whitespace() {
-                        match token.parse::<f32>() {
-                            Ok(val) => probs.push(val),
-                            Err(_) => {
-                                // Stop parsing when we hit non-numeric tokens
-                                debug!("Stopped parsing at non-numeric token: {}", token);
-                                break;
-                            }
-                        }
-                    }
-
                     // Found ownership data, no need to check more lines
                     break;
                 }
