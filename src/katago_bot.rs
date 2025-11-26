@@ -377,10 +377,17 @@ impl KatagoBot {
         }
 
         // Request ownership analysis
+        // kata-analyze runs continuously until we send 'stop' or another command
         let ownership_flag = if ownership { "true" } else { "false" };
         self.send_command(&format!("kata-analyze 100 ownership {}", ownership_flag))?;
 
-        // Wait for info response with ownership data
+        // Give KataGo time to analyze (wait ~1 second)
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Send stop command to terminate analysis and get final results
+        self.send_command("stop")?;
+
+        // Now wait for the analysis response with ownership data
         let response = self
             .wait_for_analysis_response(self.config.move_timeout_secs)
             .await?;
@@ -424,9 +431,6 @@ impl KatagoBot {
                 warn!("Response does not contain ownership data: {}", response);
             }
         }
-
-        // Send stop command
-        self.send_command("stop")?;
 
         info!(
             "Parsed {} ownership values from kata-analyze response",
