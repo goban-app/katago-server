@@ -47,7 +47,7 @@ RUN set -ex && \
   sed -i 's/numSearchThreads = 4/numSearchThreads = 2/' gtp_config.cfg && \
   sed -i 's/maxVisits = 500/maxVisits = 200/' gtp_config.cfg && \
   # Fix model path in config to match downloaded filename
-  sed -i 's|model_path = ".*"|model_path = "./kata1-b15c192-s1672170752-d466197061.bin.gz"|' config.toml
+  sed -i 's|model_path = ".*"|model_path = "./kata1-b28c512nbt-s11803203328-d5553431682.bin.gz"|' config.toml
 
 EXPOSE 2718
 
