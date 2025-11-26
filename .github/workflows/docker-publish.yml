@@ -12,13 +12,46 @@ on:
       - main
       - master
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Rust CI"]
+    types:
+      - completed
+    branches:
+      - main
+      - master
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: ${{ github.repository_owner }}/katago-server
 
 jobs:
+  # Only run if CI passed or if manually triggered
+  check-ci:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' ||
+      github.event_name == 'push' ||
+      github.event_name == 'pull_request'
+    outputs:
+      should-run: ${{ steps.check.outputs.result }}
+    steps:
+      - name: Check if should run
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            if [[ "${{ github.event.workflow_run.conclusion }}" == "success" ]]; then
+              echo "result=true" >> $GITHUB_OUTPUT
+            else
+              echo "result=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "result=true" >> $GITHUB_OUTPUT
+          fi
+
   build-and-push:
+    needs: check-ci
+    if: needs.check-ci.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -45,6 +78,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set image name to lowercase
+        id: image
+        run: echo "name=$(echo '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -60,7 +97,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ steps.image.outputs.name }}
           flavor: |
             suffix=${{ matrix.suffix }},onlatest=true
           tags: |
