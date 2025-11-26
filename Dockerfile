@@ -19,10 +19,15 @@ WORKDIR /build
 RUN git clone --depth 1 -b v1.14.1 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
-# Build for CPU (Eigen)
-RUN cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1 \
-  && make -j"$(nproc)" \
-  && strip katago
+# Build for CPU (Eigen), AVX2 nur für amd64
+RUN ARCH=$(uname -m) && \
+  if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
+    cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1; \
+  else \
+    cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=0; \
+  fi && \
+  make -j"$(nproc)" && \
+  strip katago
 
 
 # Final runtime stage
