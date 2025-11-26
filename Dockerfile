@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests
-COPY Cargo.toml ./
+# Copy manifests first for better caching
+COPY Cargo.toml Cargo.lock ./
 
-# Create dummy main to cache dependencies
+# Build dependencies only (cached unless Cargo.toml/Cargo.lock changes)
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
@@ -23,7 +23,7 @@ RUN mkdir src && \
 # Copy source code
 COPY src ./src
 
-# Build the application
+# Build the actual application (only this layer rebuilds when code changes)
 RUN touch src/main.rs && cargo build --release
 
 # Runtime stage
