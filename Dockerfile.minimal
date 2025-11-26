@@ -1,6 +1,6 @@
 # Minimal Dockerfile - brings your own KataGo and model
 # Mount katago binary and model as volumes
-FROM rust:1.75-slim as builder
+FROM rust:1.83-slim as builder
 
 WORKDIR /app
 

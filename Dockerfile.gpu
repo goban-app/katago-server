@@ -1,7 +1,7 @@
 # Dockerfile for GPU-enabled KataGo Server
 # Requires NVIDIA GPU and nvidia-docker
 # Uses CUDA-enabled KataGo for better performance
-FROM rust:1.75-slim as builder
+FROM rust:1.83-slim as builder
 
 WORKDIR /app
 

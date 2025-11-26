@@ -1,7 +1,7 @@
 # Multi-stage build for KataGo Server
 # This image includes CPU-only KataGo and a lightweight 18-block model
 # For GPU support or different models, mount them as volumes
-FROM rust:1.75-slim as builder
+FROM rust:1.83-slim as builder
 
 WORKDIR /app
 
