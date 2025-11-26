@@ -247,13 +247,15 @@ impl KatagoBot {
                         continue;
                     }
 
-                    // Collect info lines
-                    if response.starts_with("info ") {
+                    // Collect all analysis output lines (info, rootInfo, ownership, etc.)
+                    if response.starts_with("info ") 
+                        || response.starts_with("rootInfo ") 
+                        || response.starts_with("ownership ")
+                        || response.starts_with("ownershipStdev ") {
                         collected_lines.push(response.clone());
 
-                        // Check if this line contains ownership data
-                        if response.contains("ownership") {
-                            // Return the combined response
+                        // If we got ownership data, we're done
+                        if response.starts_with("ownership ") {
                             return Ok(collected_lines.join("\n"));
                         }
                     }
@@ -380,27 +382,28 @@ impl KatagoBot {
             debug!("Parsing ownership from response: {}", response);
 
             // Split response into lines and search for ownership data
+            // KataGo outputs ownership as: "ownership <361 floats>"
             for line in response.lines() {
-                if let Some(ownership_pos) = line.find("ownership") {
-                    debug!("Found ownership in line: {}", line);
-                    // Skip "ownership " (10 characters)
-                    let ownership_str = &line[ownership_pos + 10..];
+                let trimmed = line.trim();
+                if trimmed.starts_with("ownership ") {
+                    debug!("Found ownership line: {}", line);
+                    // Skip "ownership " prefix (10 characters including the space)
+                    let ownership_str = &trimmed[10..];
                     debug!("Ownership string to parse: {}", ownership_str);
 
                     for token in ownership_str.split_whitespace() {
-                        if let Ok(val) = token.parse::<f32>() {
-                            probs.push(val);
-                        } else {
-                            // Stop parsing when we hit non-numeric tokens
-                            debug!("Stopped parsing at non-numeric token: {}", token);
-                            break;
+                        match token.parse::<f32>() {
+                            Ok(val) => probs.push(val),
+                            Err(_) => {
+                                // Stop parsing when we hit non-numeric tokens
+                                debug!("Stopped parsing at non-numeric token: {}", token);
+                                break;
+                            }
                         }
                     }
 
                     // Found ownership data, no need to check more lines
-                    if !probs.is_empty() {
-                        break;
-                    }
+                    break;
                 }
             }
 
