@@ -386,10 +386,8 @@ impl KatagoBot {
             // KataGo outputs ownership as: "ownership <361 floats>"
             for line in response.lines() {
                 let trimmed = line.trim();
-                if trimmed.starts_with("ownership ") {
+                if let Some(ownership_str) = trimmed.strip_prefix("ownership ") {
                     debug!("Found ownership line: {}", line);
-                    // Skip "ownership " prefix (10 characters including the space)
-                    let ownership_str = &trimmed[10..];
                     debug!("Ownership string to parse: {}", ownership_str);
 
                     for token in ownership_str.split_whitespace() {
