@@ -1,5 +1,6 @@
 /target/
-/Cargo.lock
+# Cargo.lock should be committed for binary projects
+# /Cargo.lock
 *.swp
 *.swo
 *~
