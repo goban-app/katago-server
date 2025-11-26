@@ -61,7 +61,14 @@ jobs:
   docker-base:
     name: Build Base Docker Image
     needs: [check, test, fmt, clippy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (
+      github.event.head_commit && (
+        contains(join(github.event.head_commit.modified, ','), 'Dockerfile.base') ||
+        contains(join(github.event.head_commit.modified, ','), 'Cargo.toml') ||
+        contains(join(github.event.head_commit.modified, ','), 'Cargo.lock') ||
+        contains(join(github.event.head_commit.modified, ','), 'src/')
+      )
+    )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,6 +79,39 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Check if base image needs rebuild
+        id: skip_base
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const baseRef = pr ? pr.base.sha : context.payload.before;
+            const headRef = pr ? pr.head.sha : context.sha;
+            const changed = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: baseRef,
+              head: headRef
+            });
+            const files = changed.data.files.map(f => f.filename);
+            const needsBuild = files.some(f =>
+              f === 'Dockerfile.base' ||
+              f === 'Cargo.toml' ||
+              f === 'Cargo.lock' ||
+              f.startsWith('src/')
+            );
+            core.setOutput('needs_build', needsBuild);
+            if (!needsBuild) {
+              core.info('No relevant changes, skipping base image build.');
+              core.setOutput('skip', 'true');
+            }
+
+      - name: Exit if no base build needed
+        if: steps.skip_base.outputs.skip == 'true'
+        run: |
+          echo "No relevant changes for base image, skipping build."
+          exit 0
 
       - name: Set image name to lowercase
         id: image
@@ -179,6 +219,7 @@ jobs:
             BUILDKIT_INLINE_CACHE=1
 
       - name: Generate artifact attestation
+        if: steps.meta.outputs.digest != ''
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ steps.image.outputs.name }}
