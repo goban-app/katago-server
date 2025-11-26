@@ -34,7 +34,7 @@ ENV KATAGO_MODEL=${KATAGO_MODEL}
 RUN set -ex; \
   apt-get update; \
   if apt-get install -y --no-install-recommends libzip5; then :; else apt-get install -y --no-install-recommends libzip4; ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; fi; \
-  apt-get install -y --no-install-recommends wget libgomp1; \
+  apt-get install -y --no-install-recommends wget libgomp1 curl; \
   rm -rf /var/lib/apt/lists/*
 
 # Copy compiled binary
