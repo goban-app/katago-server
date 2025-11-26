@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fs;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct KatagoConfig {
@@ -44,19 +45,34 @@ pub struct Config {
 
 impl Config {
     pub fn from_file(path: &str) -> anyhow::Result<Self> {
-        let settings = config::Config::builder()
-            .add_source(config::File::with_name(path))
-            .build()?;
-
-        Ok(settings.try_deserialize()?)
+        let contents = fs::read_to_string(path)?;
+        let config: Config = toml::from_str(&contents)?;
+        Ok(config)
     }
 
     pub fn from_env() -> anyhow::Result<Self> {
-        let settings = config::Config::builder()
-            .add_source(config::Environment::with_prefix("KATAGO"))
-            .build()?;
-
-        Ok(settings.try_deserialize()?)
+        let mut config = Config::default();
+        
+        if let Ok(host) = std::env::var("KATAGO_SERVER_HOST") {
+            config.server.host = host;
+        }
+        if let Ok(port) = std::env::var("KATAGO_SERVER_PORT") {
+            config.server.port = port.parse()?;
+        }
+        if let Ok(path) = std::env::var("KATAGO_KATAGO_PATH") {
+            config.katago.katago_path = path;
+        }
+        if let Ok(path) = std::env::var("KATAGO_MODEL_PATH") {
+            config.katago.model_path = path;
+        }
+        if let Ok(path) = std::env::var("KATAGO_CONFIG_PATH") {
+            config.katago.config_path = path;
+        }
+        if let Ok(timeout) = std::env::var("KATAGO_MOVE_TIMEOUT_SECS") {
+            config.katago.move_timeout_secs = timeout.parse()?;
+        }
+        
+        Ok(config)
     }
 }
 

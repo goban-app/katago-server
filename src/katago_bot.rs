@@ -1,25 +1,22 @@
 use crate::config::{KatagoConfig, RequestConfig};
 use crate::error::{KatagoError, Result};
-use lazy_static::lazy_static;
 use regex::Regex;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::{Arc, Mutex as StdMutex, RwLock};
+use std::sync::{Arc, LazyLock, Mutex as StdMutex, RwLock};
 use std::thread;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex as TokioMutex};
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
-lazy_static! {
-    static ref WINRATE_RE: Regex = Regex::new(r"Winrate\s+([^\s]+)\s+").unwrap();
-    static ref SCORELEAD_RE: Regex = Regex::new(r"ScoreLead\s+([^\s]+)\s+").unwrap();
-    static ref MOVE_RE: Regex = Regex::new(r"\s+move\s+([^\s]+)\s+").unwrap();
-    static ref PSV_RE: Regex = Regex::new(r"PSV\s+([^\s]+)\s+").unwrap();
-    static ref MOVE_CANDIDATE_RE: Regex = Regex::new(r"^([^\s]+)\s+:").unwrap();
-    static ref INFO_WINRATE_RE: Regex = Regex::new(r"winrate\s+([^\s]+)\s+").unwrap();
-    static ref INFO_SCORELEAD_RE: Regex = Regex::new(r"scoreLead\s+([^\s]+)\s+").unwrap();
-}
+static WINRATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Winrate\s+([^\s]+)\s+").unwrap());
+static SCORELEAD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"ScoreLead\s+([^\s]+)\s+").unwrap());
+static MOVE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+move\s+([^\s]+)\s+").unwrap());
+static PSV_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"PSV\s+([^\s]+)\s+").unwrap());
+static MOVE_CANDIDATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^([^\s]+)\s+:").unwrap());
+static INFO_WINRATE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"winrate\s+([^\s]+)\s+").unwrap());
+static INFO_SCORELEAD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"scoreLead\s+([^\s]+)\s+").unwrap());
 
 #[derive(Debug, Clone)]
 pub struct MoveCandidate {
