@@ -258,7 +258,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: false
           load: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: katago-server:test-${{ matrix.variant }}
           cache-from: |
             type=gha,scope=${{ matrix.variant }}
             type=registry,ref=${{ steps.image.outputs.name }}:base
@@ -269,7 +269,7 @@ jobs:
         run: |
           docker run -d \
             --name test-container-${{ matrix.variant }} \
-            ${{ steps.image.outputs.name }}:latest${{ matrix.suffix }}
+            katago-server:test-${{ matrix.variant }}
 
       - name: Wait for startup
         run: sleep 15
