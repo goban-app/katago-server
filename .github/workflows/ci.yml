@@ -61,12 +61,11 @@ jobs:
   docker-base:
     name: Build Base Docker Image
     needs: [check, test, fmt, clippy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit && (contains(join(github.event.head_commit.modified, ','), 'Dockerfile.base') || contains(join(github.event.head_commit.modified, ','), 'Cargo.toml') || contains(join(github.event.head_commit.modified, ','), 'Cargo.lock') || contains(join(github.event.head_commit.modified, ','), 'src/'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      attestations: write
+      #attestations: write
       id-token: write
 
     steps:
@@ -135,13 +134,12 @@ jobs:
   docker-variants:
     name: Build Docker Variants
     needs: docker-base
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit && (contains(join(github.event.head_commit.modified, ','), 'Dockerfile') || contains(join(github.event.head_commit.modified, ','), 'Dockerfile.gpu') || contains(join(github.event.head_commit.modified, ','), 'Dockerfile.minimal') || contains(join(github.event.head_commit.modified, ','), 'Cargo.toml') || contains(join(github.event.head_commit.modified, ','), 'Cargo.lock') || contains(join(github.event.head_commit.modified, ','), 'src/'))
     runs-on: ubuntu-latest
     # workflow: trigger dummy change
     permissions:
       contents: read
       packages: write
-      attestations: write
+      #attestations: write
       id-token: write
     
     strategy:
