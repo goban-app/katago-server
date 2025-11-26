@@ -17,11 +17,13 @@ pub enum KatagoError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
+    #[allow(dead_code)]
     #[error("Invalid GTP command: {0}")]
     InvalidCommand(String),
 
+    #[allow(dead_code)]
     #[error("KataGo returned error: {0}")]
-    KatagoError(String),
+    ResponseError(String),
 }
 
 pub type Result<T> = std::result::Result<T, KatagoError>;

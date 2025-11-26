@@ -3,11 +3,11 @@ use crate::error::{KatagoError, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::{Arc, Mutex};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::{Arc, Mutex as StdMutex, RwLock};
 use std::thread;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex as TokioMutex};
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
@@ -48,11 +48,11 @@ impl Default for Diagnostics {
 
 pub struct KatagoBot {
     config: KatagoConfig,
-    process: Arc<Mutex<Option<Child>>>,
-    stdin: Arc<Mutex<Option<ChildStdin>>>,
-    response_rx: Arc<Mutex<mpsc::UnboundedReceiver<String>>>,
-    last_move_color: Arc<Mutex<String>>,
-    diagnostics: Arc<Mutex<Diagnostics>>,
+    process: Arc<StdMutex<Option<Child>>>,
+    stdin: Arc<StdMutex<Option<ChildStdin>>>,
+    response_rx: Arc<TokioMutex<mpsc::UnboundedReceiver<String>>>,
+    last_move_color: Arc<TokioMutex<String>>,
+    diagnostics: Arc<RwLock<Diagnostics>>,
 }
 
 impl KatagoBot {
@@ -61,11 +61,11 @@ impl KatagoBot {
         
         let mut bot = Self {
             config: config.clone(),
-            process: Arc::new(Mutex::new(None)),
-            stdin: Arc::new(Mutex::new(None)),
-            response_rx: Arc::new(Mutex::new(response_rx)),
-            last_move_color: Arc::new(Mutex::new(String::new())),
-            diagnostics: Arc::new(Mutex::new(Diagnostics::default())),
+            process: Arc::new(StdMutex::new(None)),
+            stdin: Arc::new(StdMutex::new(None)),
+            response_rx: Arc::new(TokioMutex::new(response_rx)),
+            last_move_color: Arc::new(TokioMutex::new(String::new())),
+            diagnostics: Arc::new(RwLock::new(Diagnostics::default())),
         };
 
         bot.start_process(response_tx)?;
@@ -87,7 +87,7 @@ impl KatagoBot {
             .arg(&self.config.config_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::stdout())
+            .stderr(Stdio::null())
             .spawn()
             .map_err(|e| KatagoError::ProcessStartFailed(e.to_string()))?;
 
@@ -127,8 +127,8 @@ impl KatagoBot {
         Ok(())
     }
 
-    fn handle_response(line: &str, diagnostics: &Arc<Mutex<Diagnostics>>) {
-        let mut diag = diagnostics.lock().unwrap();
+    fn handle_response(line: &str, diagnostics: &Arc<RwLock<Diagnostics>>) {
+        let mut diag = diagnostics.write().unwrap();
 
         // Parse winrate and score from CHAT/MALKOVICH
         if line.contains("CHAT:") || line.contains("MALKOVICH:") {
@@ -177,8 +177,8 @@ impl KatagoBot {
         }
         
         // Parse GTP move response
-        else if line.starts_with('=') {
-            let resp = line[1..].trim();
+        else if let Some(stripped) = line.strip_prefix('=') {
+            let resp = stripped.trim();
             if !resp.is_empty() {
                 diag.bot_move = resp.to_string();
             }
@@ -200,7 +200,7 @@ impl KatagoBot {
         
         timeout(duration, async {
             loop {
-                let mut rx = self.response_rx.lock().unwrap();
+                let mut rx = self.response_rx.lock().await;
                 if let Some(response) = rx.recv().await {
                     if response.starts_with('=') || response.starts_with("info ") {
                         return Ok(response);
@@ -246,7 +246,7 @@ impl KatagoBot {
         
         // Reset diagnostics
         {
-            let mut diag = self.diagnostics.lock().unwrap();
+            let mut diag = self.diagnostics.write().unwrap();
             *diag = Diagnostics::default();
         }
 
@@ -269,7 +269,7 @@ impl KatagoBot {
             color = if color == "b" { "w" } else { "b" };
         }
 
-        *self.last_move_color.lock().unwrap() = color.to_string();
+        *self.last_move_color.lock().await = color.to_string();
 
         // Request move
         self.send_command(&format!("genmove {}", color))?;
@@ -277,8 +277,8 @@ impl KatagoBot {
         // Wait for response
         let response = self.wait_for_response(self.config.move_timeout_secs).await?;
         
-        if response.starts_with('=') {
-            let mv = response[1..].trim().to_string();
+        if let Some(stripped) = response.strip_prefix('=') {
+            let mv = stripped.trim().to_string();
             info!("KataGo selected move: {}", mv);
             Ok(mv)
         } else {
@@ -295,7 +295,7 @@ impl KatagoBot {
         
         // Reset diagnostics
         {
-            let mut diag = self.diagnostics.lock().unwrap();
+            let mut diag = self.diagnostics.write().unwrap();
             *diag = Diagnostics::default();
         }
 
@@ -347,7 +347,7 @@ impl KatagoBot {
     }
 
     pub fn diagnostics(&self) -> Diagnostics {
-        self.diagnostics.lock().unwrap().clone()
+        self.diagnostics.read().unwrap().clone()
     }
 }
 

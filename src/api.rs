@@ -1,4 +1,4 @@
-use crate::katago_bot::{Diagnostics, KatagoBot, MoveCandidate};
+use crate::katago_bot::{Diagnostics, KatagoBot};
 use crate::config::RequestConfig;
 use axum::{
     extract::State,
@@ -15,6 +15,7 @@ pub type AppState = Arc<KatagoBot>;
 
 #[derive(Debug, Deserialize)]
 pub struct SelectMoveRequest {
+    #[allow(dead_code)]
     pub board_size: u8,
     pub moves: Vec<String>,
     #[serde(default)]
@@ -30,6 +31,7 @@ pub struct SelectMoveResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ScoreRequest {
+    #[allow(dead_code)]
     pub board_size: u8,
     pub moves: Vec<String>,
     #[serde(default)]
@@ -111,10 +113,11 @@ async fn health() -> impl IntoResponse {
     }))
 }
 
+#[axum::debug_handler]
 async fn select_move(
     State(bot): State<AppState>,
     Json(request): Json<SelectMoveRequest>,
-) -> Result<Json<SelectMoveResponse>, ApiError> {
+) -> std::result::Result<Json<SelectMoveResponse>, ApiError> {
     let bot_move = bot.select_move(&request.moves, &request.config).await?;
     let diagnostics = bot.diagnostics();
     let request_id = request.config.request_id.clone().unwrap_or_default();
@@ -126,10 +129,11 @@ async fn select_move(
     }))
 }
 
+#[axum::debug_handler]
 async fn score(
     State(bot): State<AppState>,
     Json(request): Json<ScoreRequest>,
-) -> Result<Json<ScoreResponse>, ApiError> {
+) -> std::result::Result<Json<ScoreResponse>, ApiError> {
     let probs = bot.score(&request.moves, &request.config).await?;
     let diagnostics = bot.diagnostics();
     let request_id = request.config.request_id.clone().unwrap_or_default();
