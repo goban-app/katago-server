@@ -22,9 +22,9 @@ WORKDIR /build/KataGo/cpp
 # Build for CPU (Eigen), AVX2 nur für amd64
 RUN ARCH=$(uname -m) && \
   if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
-    cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1; \
+  cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1; \
   else \
-    cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=0; \
+  cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=0; \
   fi && \
   make -j"$(nproc)" && \
   strip katago
@@ -52,7 +52,7 @@ RUN chmod +x docker-setup.sh && ./docker-setup.sh
 
 EXPOSE 2718
 
-ENV RUST_LOG=info
+ENV RUST_LOG=debug
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
