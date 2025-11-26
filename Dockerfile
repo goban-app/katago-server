@@ -47,23 +47,23 @@ COPY --from=builder /app/target/release/katago-server /app/
 COPY config.toml.example /app/config.toml.example
 COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 
-# Download KataGo and model
+# Download KataGo and model in parallel, then configure
 # Default: CPU-only version (eigen build for broad compatibility)
 # For GPU or better performance: mount your own katago binary and model as volumes
 ARG KATAGO_VERSION=v1.14.1
 ARG KATAGO_BUILD=eigen
 
-RUN wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip && \
+RUN set -ex && \
+    # Download KataGo binary and model in parallel using background jobs
+    wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip & \
+    wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b15c192-s1672170752-d466197061/network_file & \
+    wait && \
+    # Extract and cleanup
     unzip -q katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip && \
     chmod +x katago && \
-    rm katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip
-
-# Download a lightweight model from KataGo training site
-# Using 15-block network (~120MB) for faster downloads and reasonable play
-RUN wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b15c192-s1672170752-d466197061/network_file
-
-# Create default configs optimized for CPU usage
-RUN cp config.toml.example config.toml && \
+    rm katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip && \
+    # Create default configs optimized for CPU usage
+    cp config.toml.example config.toml && \
     cp gtp_config.cfg.example gtp_config.cfg && \
     sed -i 's/numSearchThreads = 4/numSearchThreads = 2/' gtp_config.cfg && \
     sed -i 's/maxVisits = 500/maxVisits = 200/' gtp_config.cfg

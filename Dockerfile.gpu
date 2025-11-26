@@ -35,20 +35,21 @@ COPY --from=builder /app/target/release/katago-server /app/
 COPY config.toml.example /app/config.toml.example
 COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 
-# Download CUDA-enabled KataGo and a stronger model
+# Download CUDA-enabled KataGo and a stronger model in parallel
 ARG KATAGO_VERSION=v1.14.1
 ARG CUDA_VERSION=cuda12.1-cudnn8.9.7
 
-RUN wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
+RUN set -ex && \
+    # Download KataGo binary and model in parallel
+    wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip & \
+    wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file & \
+    wait && \
+    # Extract and cleanup
     unzip -q katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
     chmod +x katago && \
-    rm katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip
-
-# Download a strong 40-block network for GPU (~450MB)
-RUN wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file
-
-# Create GPU-optimized configs
-RUN cp config.toml.example config.toml && \
+    rm katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
+    # Create GPU-optimized configs
+    cp config.toml.example config.toml && \
     cp gtp_config.cfg.example gtp_config.cfg && \
     sed -i 's/numSearchThreads = 4/numSearchThreads = 8/' gtp_config.cfg && \
     sed -i 's/maxVisits = 500/maxVisits = 800/' gtp_config.cfg && \
