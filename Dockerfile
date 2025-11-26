@@ -2,29 +2,45 @@
 # Builds on top of base image with pre-compiled binary
 # This image includes CPU-only KataGo and a lightweight 18-block model
 
-FROM ghcr.io/stubbi/katago-server:base AS runtime-base
+# Builder stage for KataGo
+FROM debian:bookworm-slim AS katago-builder
 
-# Install wget and unzip for downloading KataGo
-RUN apt-get update && apt-get install -y    wget \
-  unzip \
-  libzip5 \
+RUN apt-get update && apt-get install -y \
+  git \
+  build-essential \
+  cmake \
+  libeigen3-dev \
+  libzip-dev \
+  libssl-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# Download KataGo and model in parallel, then configure
-# Default: CPU-only version (eigen build for broad compatibility)
-# For GPU or better performance: mount your own katago binary and model as volumes
-ARG KATAGO_VERSION=v1.14.1
-ARG KATAGO_BUILD=eigen
+WORKDIR /build
+# Clone specific version
+RUN git clone --depth 1 -b v1.14.1 https://github.com/lightvector/KataGo.git
 
+WORKDIR /build/KataGo/cpp
+# Build for CPU (Eigen)
+RUN cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1 \
+  && make -j"$(nproc)" \
+  && strip katago
+
+# Final runtime stage
+FROM ghcr.io/stubbi/katago-server:base AS runtime-base
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+  wget \
+  libzip4 \
+  libgomp1 \
+  && rm -rf /var/lib/apt/lists/*
+
+# Copy compiled binary
+COPY --from=katago-builder /build/KataGo/cpp/katago /app/katago
+
+# Download model and configure
 RUN set -ex && \
-  # Download KataGo binary and model in parallel using background jobs
-  wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip & \
-  wget -q -O kata1-b15c192-s1672170752-d466197061.bin.gz https://katagotraining.org/api/networks/kata1-b15c192-s1672170752-d466197061/network_file & \
-  wait && \
-  # Extract and cleanup
-  unzip -q katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip && \
+  wget -q -O kata1-b15c192-s1672170752-d466197061.bin.gz https://katagotraining.org/api/networks/kata1-b15c192-s1672170752-d466197061/network_file && \
   chmod +x katago && \
-  rm katago-${KATAGO_VERSION}-${KATAGO_BUILD}-linux-x64.zip && \
   # Create default configs optimized for CPU usage
   cp config.toml.example config.toml && \
   cp gtp_config.cfg.example gtp_config.cfg && \

@@ -25,7 +25,7 @@ COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
 # Base runtime image with just the binary
-FROM ubuntu:20.04 AS runtime-base
+FROM debian:bookworm-slim AS runtime-base
 
 WORKDIR /app
 

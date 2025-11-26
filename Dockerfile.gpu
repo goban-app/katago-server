@@ -1,41 +1,53 @@
-# Dockerfile for GPU-enabled KataGo Server
-# Requires NVIDIA GPU and nvidia-docker
-# Uses CUDA-enabled KataGo for better performance
+# Builder stage for KataGo (needs devel image for nvcc)
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS katago-builder
 
-# Get the binary from base image
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y \
+  git \
+  build-essential \
+  cmake \
+  libzip-dev \
+  libssl-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+# Clone specific version
+RUN git clone --depth 1 -b v1.14.1 https://github.com/lightvector/KataGo.git
+
+WORKDIR /build/KataGo/cpp
+# Build for CUDA
+RUN cmake . -DUSE_BACKEND=CUDA \
+  && make -j"$(nproc)" \
+  && strip katago
+
+# Get the server binary from base image
 FROM ghcr.io/stubbi/katago-server:base AS binary
 
-# Start from CUDA base for GPU support
-FROM nvidia/cuda:12.2.0-base-ubuntu20.04
+# Final runtime stage
+FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 
 WORKDIR /app
 
+# Runtime deps (libzip4 is in Ubuntu 22.04)
 RUN apt-get update && apt-get install -y \
   ca-certificates \
   wget \
-  unzip \
+  libzip4 \
   libgomp1 \
-  libzip5 \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy binary and configs from base image
+# Copy binaries
 COPY --from=binary /app/katago-server /app/
+COPY --from=katago-builder /build/KataGo/cpp/katago /app/katago
+
+# Copy configs
 COPY config.toml.example /app/config.toml.example
 COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 
-# Download CUDA-enabled KataGo and a stronger model in parallel
-ARG KATAGO_VERSION=v1.14.1
-ARG CUDA_VERSION=cuda12.1-cudnn8.9.7
-
+# Download model and configure
 RUN set -ex && \
-  # Download KataGo binary and model in parallel
-  wget -q https://github.com/lightvector/KataGo/releases/download/${KATAGO_VERSION}/katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip & \
-  wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file & \
-  wait && \
-  # Extract and cleanup
-  unzip -q katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
+  wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file && \
   chmod +x katago && \
-  rm katago-${KATAGO_VERSION}-${CUDA_VERSION}-linux-x64.zip && \
   # Create GPU-optimized configs
   cp config.toml.example config.toml && \
   cp gtp_config.cfg.example gtp_config.cfg && \
