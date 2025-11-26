@@ -50,30 +50,15 @@ RUN set -ex; \
   apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
   rm -rf /var/lib/apt/lists/*
 
-# Copy binaries
+# Copy binaries and configs
 COPY --from=binary /app/katago-server /app/
 COPY --from=katago-builder /build/KataGo/cpp/katago /app/katago
-
-# Copy configs
 COPY config.toml.example /app/config.toml.example
-COPY gtp_config.cfg.example /app/gtp_config.cfg.example
+COPY gtp_config.cfg.gpu /app/gtp_config.cfg
+COPY docker-setup.sh /app/
 
 # Download model and configure
-RUN set -ex && \
-  wget -q -O "$KATAGO_MODEL" "https://media.katagotraining.org/uploaded/networks/models/kata1/$KATAGO_MODEL" && \
-  chmod +x katago && \
-  # Create GPU-optimized configs
-  cp config.toml.example config.toml && \
-  cp gtp_config.cfg.example gtp_config.cfg && \
-  sed -i 's/numSearchThreads = 4/numSearchThreads = 8/' gtp_config.cfg && \
-  sed -i 's/maxVisits = 500/maxVisits = 800/' gtp_config.cfg && \
-  sed -i 's/# numNNServerThreadsPerModel = 1/numNNServerThreadsPerModel = 2/' gtp_config.cfg && \
-  sed -i 's/# nnMaxBatchSize = 16/nnMaxBatchSize = 32/' gtp_config.cfg && \
-  # Entferne alte Rule-Keys, falls noch vorhanden
-  sed -i '/^koRule\s*=\|^scoringRule\s*=\|^taxRule\s*=\|^multiStoneSuicideLegal\s*=.*/d' gtp_config.cfg && \
-  # Füge logAllGTPCommunication = false hinzu, falls nicht vorhanden
-  grep -q '^logAllGTPCommunication' gtp_config.cfg || echo 'logAllGTPCommunication = false' >> gtp_config.cfg && \
-  sed -i "s|model_path = \".*\"|model_path = \"./$KATAGO_MODEL\"|" config.toml
+RUN chmod +x docker-setup.sh && ./docker-setup.sh
 
 EXPOSE 2718
 

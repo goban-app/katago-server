@@ -42,24 +42,13 @@ RUN set -ex; \
   apt-get install -y --no-install-recommends wget libgomp1; \
   rm -rf /var/lib/apt/lists/*
 
-# Copy compiled binary
+# Copy compiled binary and configs
 COPY --from=katago-builder /build/KataGo/cpp/katago /app/katago
+COPY gtp_config.cfg.cpu /app/gtp_config.cfg
+COPY docker-setup.sh /app/
 
 # Download model and configure
-RUN set -ex && \
-  wget -q -O "$KATAGO_MODEL" "https://media.katagotraining.org/uploaded/networks/models/kata1/$KATAGO_MODEL" && \
-  chmod +x katago && \
-  # Create default configs optimized for CPU usage
-  cp config.toml.example config.toml && \
-  cp gtp_config.cfg.example gtp_config.cfg && \
-  sed -i 's/numSearchThreads = 4/numSearchThreads = 2/' gtp_config.cfg && \
-  sed -i 's/maxVisits = 500/maxVisits = 200/' gtp_config.cfg && \
-  # Entferne alte Rule-Keys, falls noch vorhanden
-  sed -i '/^koRule\s*=\|^scoringRule\s*=\|^taxRule\s*=\|^multiStoneSuicideLegal\s*=.*/d' gtp_config.cfg && \
-  # Füge logAllGTPCommunication = false hinzu, falls nicht vorhanden
-  grep -q '^logAllGTPCommunication' gtp_config.cfg || echo 'logAllGTPCommunication = false' >> gtp_config.cfg && \
-  # Fix model path in config to match downloaded filename
-  sed -i "s|model_path = \".*\"|model_path = \"./$KATAGO_MODEL\"|" config.toml
+RUN chmod +x docker-setup.sh && ./docker-setup.sh
 
 EXPOSE 2718
 
