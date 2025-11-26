@@ -1,0 +1,24 @@
+/target/
+/Cargo.lock
+*.swp
+*.swo
+*~
+.DS_Store
+
+# KataGo files
+katago
+katago_eigen
+katago_cuda
+katago_opencl
+*.bin.gz
+*.txt.gz
+gtp_config.cfg
+config.toml
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.iml

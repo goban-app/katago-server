@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  katago-server:
+    build: .
+    ports:
+      - "2718:2718"
+    volumes:
+      # Mount custom config if needed
+      - ./config.toml:/app/config.toml:ro
+      - ./gtp_config.cfg:/app/gtp_config.cfg:ro
+    environment:
+      - RUST_LOG=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2718/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
