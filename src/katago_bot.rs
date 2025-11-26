@@ -234,16 +234,28 @@ impl KatagoBot {
 
     async fn wait_for_analysis_response(&self, timeout_secs: u64) -> Result<String> {
         let duration = Duration::from_secs(timeout_secs);
+        let mut collected_lines = Vec::new();
 
         timeout(duration, async {
             loop {
                 let mut rx = self.response_rx.lock().await;
                 if let Some(response) = rx.recv().await {
                     debug!("Received response for analysis: {}", response);
-                    // For kata-analyze, skip the initial '=' acknowledgment
-                    // and wait for an 'info' line that contains ownership data
-                    if response.starts_with("info ") && response.contains("ownership") {
-                        return Ok(response);
+
+                    // Skip the initial '=' acknowledgment
+                    if response.starts_with('=') {
+                        continue;
+                    }
+
+                    // Collect info lines
+                    if response.starts_with("info ") {
+                        collected_lines.push(response.clone());
+
+                        // Check if this line contains ownership data
+                        if response.contains("ownership") {
+                            // Return the combined response
+                            return Ok(collected_lines.join("\n"));
+                        }
                     }
                 } else {
                     return Err(KatagoError::ProcessDied);
@@ -364,22 +376,37 @@ impl KatagoBot {
 
         // Parse ownership values if requested
         let mut probs = Vec::new();
-        if ownership && response.contains("ownership") {
-            debug!("Response contains ownership data: {}", response);
-            if let Some(ownership_pos) = response.find("ownership") {
-                let ownership_str = &response[ownership_pos + 9..];
-                debug!("Ownership string to parse: {}", ownership_str);
-                for token in ownership_str.split_whitespace() {
-                    if let Ok(val) = token.parse::<f32>() {
-                        probs.push(val);
-                    } else {
-                        // Stop parsing when we hit non-numeric tokens
+        if ownership {
+            debug!("Parsing ownership from response: {}", response);
+
+            // Split response into lines and search for ownership data
+            for line in response.lines() {
+                if let Some(ownership_pos) = line.find("ownership") {
+                    debug!("Found ownership in line: {}", line);
+                    // Skip "ownership " (10 characters)
+                    let ownership_str = &line[ownership_pos + 10..];
+                    debug!("Ownership string to parse: {}", ownership_str);
+
+                    for token in ownership_str.split_whitespace() {
+                        if let Ok(val) = token.parse::<f32>() {
+                            probs.push(val);
+                        } else {
+                            // Stop parsing when we hit non-numeric tokens
+                            debug!("Stopped parsing at non-numeric token: {}", token);
+                            break;
+                        }
+                    }
+
+                    // Found ownership data, no need to check more lines
+                    if !probs.is_empty() {
                         break;
                     }
                 }
             }
-        } else {
-            warn!("Response does not contain ownership data: {}", response);
+
+            if probs.is_empty() {
+                warn!("Response does not contain ownership data: {}", response);
+            }
         }
 
         // Send stop command
