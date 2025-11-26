@@ -88,12 +88,15 @@ impl KatagoBot {
             .arg(&self.config.config_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| KatagoError::ProcessStartFailed(e.to_string()))?;
 
         let stdout = cmd.stdout.take().ok_or(KatagoError::ProcessStartFailed(
             "Failed to capture stdout".to_string(),
+        ))?;
+        let stderr = cmd.stderr.take().ok_or(KatagoError::ProcessStartFailed(
+            "Failed to capture stderr".to_string(),
         ))?;
         let stdin = cmd.stdin.take().ok_or(KatagoError::ProcessStartFailed(
             "Failed to capture stdin".to_string(),
@@ -102,7 +105,24 @@ impl KatagoBot {
         *self.stdin.lock().unwrap() = Some(stdin);
         *self.process.lock().unwrap() = Some(cmd);
 
-        // Spawn reader thread
+        // Spawn stderr reader thread
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                match line {
+                    Ok(line) => {
+                        error!("KataGo stderr: {}", line);
+                    }
+                    Err(e) => {
+                        error!("Error reading stderr from KataGo: {}", e);
+                        break;
+                    }
+                }
+            }
+            warn!("KataGo stderr closed");
+        });
+
+        // Spawn stdout reader thread
         let diagnostics = Arc::clone(&self.diagnostics);
         thread::spawn(move || {
             let reader = BufReader::new(stdout);
