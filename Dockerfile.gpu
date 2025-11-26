@@ -2,13 +2,23 @@
 FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS katago-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
   git \
   build-essential \
   cmake \
   libzip-dev \
   libssl-dev \
+  wget \
   && rm -rf /var/lib/apt/lists/*
+
+# cuDNN 8.9.7 für CUDA 12.2 installieren
+RUN wget -q https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz \
+  && tar -xf cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz \
+  && cp cudnn-linux-x86_64-8.9.7.29_cuda12-archive/include/* /usr/local/cuda/include/ \
+  && cp cudnn-linux-x86_64-8.9.7.29_cuda12-archive/lib/* /usr/local/cuda/lib64/ \
+  && ldconfig \
+  && rm -rf cudnn-linux-x86_64-8.9.7.29_cuda12-archive*
 
 WORKDIR /build
 # Clone specific version
@@ -16,7 +26,7 @@ RUN git clone --depth 1 -b v1.14.1 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 # Build for CUDA
-RUN cmake . -DUSE_BACKEND=CUDA \
+RUN cmake . -DUSE_BACKEND=CUDA -DCUDNN_INCLUDE_DIR=/usr/local/cuda/include \
   && make -j"$(nproc)" \
   && strip katago
 
