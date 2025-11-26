@@ -111,7 +111,7 @@ impl KatagoBot {
             for line in reader.lines() {
                 match line {
                     Ok(line) => {
-                        error!("KataGo stderr: {}", line);
+                        debug!("KataGo stderr: {}", line);
                     }
                     Err(e) => {
                         error!("Error reading stderr from KataGo: {}", e);
@@ -119,7 +119,7 @@ impl KatagoBot {
                     }
                 }
             }
-            warn!("KataGo stderr closed");
+            debug!("KataGo stderr closed");
         });
 
         // Spawn stdout reader thread
