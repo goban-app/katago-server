@@ -232,6 +232,28 @@ impl KatagoBot {
         .map_err(|_| KatagoError::Timeout(timeout_secs))?
     }
 
+    async fn wait_for_analysis_response(&self, timeout_secs: u64) -> Result<String> {
+        let duration = Duration::from_secs(timeout_secs);
+
+        timeout(duration, async {
+            loop {
+                let mut rx = self.response_rx.lock().await;
+                if let Some(response) = rx.recv().await {
+                    debug!("Received response for analysis: {}", response);
+                    // For kata-analyze, skip the initial '=' acknowledgment
+                    // and wait for an 'info' line that contains ownership data
+                    if response.starts_with("info ") && response.contains("ownership") {
+                        return Ok(response);
+                    }
+                } else {
+                    return Err(KatagoError::ProcessDied);
+                }
+            }
+        })
+        .await
+        .map_err(|_| KatagoError::Timeout(timeout_secs))?
+    }
+
     fn set_rules(&self, komi: f32, config: &RequestConfig) -> Result<()> {
         let rules = if config.client.as_deref() == Some("kifucam") {
             "chinese"
@@ -335,28 +357,35 @@ impl KatagoBot {
         let ownership_flag = if ownership { "true" } else { "false" };
         self.send_command(&format!("kata-analyze 100 ownership {}", ownership_flag))?;
 
-        // Wait for info response
+        // Wait for info response with ownership data
         let response = self
-            .wait_for_response(self.config.move_timeout_secs)
+            .wait_for_analysis_response(self.config.move_timeout_secs)
             .await?;
 
         // Parse ownership values if requested
         let mut probs = Vec::new();
         if ownership && response.contains("ownership") {
+            debug!("Response contains ownership data: {}", response);
             if let Some(ownership_pos) = response.find("ownership") {
                 let ownership_str = &response[ownership_pos + 9..];
+                debug!("Ownership string to parse: {}", ownership_str);
                 for token in ownership_str.split_whitespace() {
                     if let Ok(val) = token.parse::<f32>() {
                         probs.push(val);
+                    } else {
+                        // Stop parsing when we hit non-numeric tokens
+                        break;
                     }
                 }
             }
+        } else {
+            warn!("Response does not contain ownership data: {}", response);
         }
 
         // Send stop command
         self.send_command("stop")?;
 
-        info!("Parsed {} ownership values", probs.len());
+        info!("Parsed {} ownership values from kata-analyze response", probs.len());
         Ok(probs)
     }
 
