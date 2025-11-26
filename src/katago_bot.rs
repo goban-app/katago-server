@@ -385,7 +385,10 @@ impl KatagoBot {
         // Send stop command
         self.send_command("stop")?;
 
-        info!("Parsed {} ownership values from kata-analyze response", probs.len());
+        info!(
+            "Parsed {} ownership values from kata-analyze response",
+            probs.len()
+        );
         Ok(probs)
     }
 
