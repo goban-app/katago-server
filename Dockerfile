@@ -1,51 +1,14 @@
-# Multi-stage build for KataGo Server
+# Multi-stage build for KataGo Server - CPU variant
+# Builds on top of base image with pre-compiled binary
 # This image includes CPU-only KataGo and a lightweight 18-block model
-# For GPU support or different models, mount them as volumes
-FROM rust:1.83-slim AS builder
 
-WORKDIR /app
+FROM ghcr.io/stubbi/katago-server:base AS runtime-base
 
-# Install dependencies
+# Install wget and unzip for downloading KataGo
 RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy manifests first for better caching
-COPY Cargo.toml Cargo.lock ./
-
-# Build dependencies only (cached unless Cargo.toml/Cargo.lock changes)
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-# Copy source code
-COPY src ./src
-
-# Build the actual application (only this layer rebuilds when code changes)
-RUN touch src/main.rs && cargo build --release
-
-# Runtime stage
-FROM debian:bookworm-slim
-
-WORKDIR /app
-
-# Install runtime dependencies
-# libgomp1 is required for OpenMP support in KataGo
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
     wget \
     unzip \
-    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy the binary
-COPY --from=builder /app/target/release/katago-server /app/
-
-# Copy config templates
-COPY config.toml.example /app/config.toml.example
-COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 
 # Download KataGo and model in parallel, then configure
 # Default: CPU-only version (eigen build for broad compatibility)

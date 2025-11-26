@@ -1,36 +1,8 @@
 # Minimal Dockerfile - brings your own KataGo and model
 # Mount katago binary and model as volumes
-FROM rust:1.83-slim AS builder
+# Builds on top of base image
 
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-COPY src ./src
-RUN touch src/main.rs && cargo build --release
-
-# Minimal runtime
-FROM debian:bookworm-slim
-
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /app/target/release/katago-server /app/
-COPY config.toml.example /app/config.toml.example
-COPY gtp_config.cfg.example /app/gtp_config.cfg.example
+FROM ghcr.io/stubbi/katago-server:base
 
 # Create default configs pointing to mounted paths
 RUN cp config.toml.example config.toml && \

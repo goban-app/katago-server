@@ -1,25 +1,11 @@
 # Dockerfile for GPU-enabled KataGo Server
 # Requires NVIDIA GPU and nvidia-docker
 # Uses CUDA-enabled KataGo for better performance
-FROM rust:1.83-slim AS builder
 
-WORKDIR /app
+# Get the binary from base image
+FROM ghcr.io/stubbi/katago-server:base AS binary
 
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-COPY src ./src
-RUN touch src/main.rs && cargo build --release
-
-# Runtime stage with CUDA support
+# Start from CUDA base for GPU support
 FROM nvidia/cuda:12.2.0-base-ubuntu22.04
 
 WORKDIR /app
@@ -31,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/katago-server /app/
+# Copy binary and configs from base image
+COPY --from=binary /app/katago-server /app/
 COPY config.toml.example /app/config.toml.example
 COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 

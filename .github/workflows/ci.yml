@@ -58,10 +58,48 @@ jobs:
           shared-key: "rust-cache"
       - run: cargo clippy --all-features -- -D warnings
 
-  docker:
-    name: Build Docker Images
+  docker-base:
+    name: Build Base Docker Image
     needs: [check, test, fmt, clippy]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set image name to lowercase
+        id: image
+        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.base
+          push: true
+          tags: ${{ steps.image.outputs.name }}:base
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,mode=max,scope=base
+          platforms: linux/amd64,linux/arm64
+
+  docker-variants:
+    name: Build Docker Variants
+    needs: docker-base
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -130,7 +168,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: |
             type=gha,scope=${{ matrix.variant }}
-            type=registry,ref=ghcr.io/${{ github.repository_owner }}/katago-server:buildcache-${{ matrix.variant }}
+            type=registry,ref=${{ steps.image.outputs.name }}:base
           cache-to: type=gha,mode=max,scope=${{ matrix.variant }}
           platforms: linux/amd64,linux/arm64
           build-args: |
@@ -139,6 +177,6 @@ jobs:
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ghcr.io/${{ github.repository_owner }}/katago-server
+          subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.meta.outputs.digest }}
           push-to-registry: true
