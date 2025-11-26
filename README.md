@@ -1,7 +1,7 @@
 # KataGo Server (Rust)
 
 [![CI](https://github.com/stubbi/katago-server/actions/workflows/ci.yml/badge.svg)](https://github.com/stubbi/katago-server/actions/workflows/ci.yml)
-[![Docker Image](https://ghcr-badge.egpl.dev/stubbi/katago-server/latest_tag?color=%2344cc11&ignore=latest*&label=docker)](https://github.com/stubbi/katago-server/pkgs/container/katago-server)
+[![Docker Image](https://ghcr-badge.egpl.dev/stubbi/katago-server/latest_tag?color=%2344cc11&label=docker&trim=major)](https://github.com/stubbi/katago-server/pkgs/container/katago-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
 
