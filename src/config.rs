@@ -47,7 +47,7 @@ impl Config {
         let settings = config::Config::builder()
             .add_source(config::File::with_name(path))
             .build()?;
-        
+
         Ok(settings.try_deserialize()?)
     }
 
@@ -55,7 +55,7 @@ impl Config {
         let settings = config::Config::builder()
             .add_source(config::Environment::with_prefix("KATAGO"))
             .build()?;
-        
+
         Ok(settings.try_deserialize()?)
     }
 }

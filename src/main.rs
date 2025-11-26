@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     // Start server
     let addr = format!("{}:{}", config.server.host, config.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    
+
     info!("Listening on http://{}", addr);
     info!("API endpoints:");
     info!("  POST /select-move/katago_gtp_bot - Get best move");

@@ -1,11 +1,11 @@
-use crate::katago_bot::{Diagnostics, KatagoBot};
 use crate::config::RequestConfig;
+use crate::katago_bot::{Diagnostics, KatagoBot};
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json, Router,
     routing::post,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -66,10 +66,14 @@ impl From<Diagnostics> for DiagnosticsResponse {
             winprob: diag.winprob,
             score: diag.score,
             bot_move: diag.bot_move,
-            best_ten: diag.best_ten.into_iter().map(|c| MoveCandidateResponse {
-                mv: c.mv,
-                psv: c.psv,
-            }).collect(),
+            best_ten: diag
+                .best_ten
+                .into_iter()
+                .map(|c| MoveCandidateResponse {
+                    mv: c.mv,
+                    psv: c.psv,
+                })
+                .collect(),
         }
     }
 }

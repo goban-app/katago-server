@@ -58,7 +58,7 @@ pub struct KatagoBot {
 impl KatagoBot {
     pub fn new(config: KatagoConfig) -> Result<Self> {
         let (response_tx, response_rx) = mpsc::unbounded_channel();
-        
+
         let mut bot = Self {
             config: config.clone(),
             process: Arc::new(StdMutex::new(None)),
@@ -69,16 +69,16 @@ impl KatagoBot {
         };
 
         bot.start_process(response_tx)?;
-        
+
         // Wait a bit for initialization
         thread::sleep(Duration::from_millis(500));
-        
+
         Ok(bot)
     }
 
     fn start_process(&mut self, response_tx: mpsc::UnboundedSender<String>) -> Result<()> {
         info!("Starting KataGo process");
-        
+
         let mut cmd = Command::new(&self.config.katago_path)
             .arg("gtp")
             .arg("-model")
@@ -144,7 +144,6 @@ impl KatagoBot {
             }
             diag.best_ten.clear();
         }
-        
         // Parse move candidates with PSV
         else if line.contains(" PSV ") {
             if let Some(psv_cap) = PSV_RE.captures(line) {
@@ -158,7 +157,6 @@ impl KatagoBot {
                 }
             }
         }
-        
         // Parse kata-analyze info response
         else if line.starts_with("info ") {
             if let Some(cap) = INFO_WINRATE_RE.captures(line) {
@@ -175,7 +173,6 @@ impl KatagoBot {
                 diag.bot_move = cap[1].to_string();
             }
         }
-        
         // Parse GTP move response
         else if let Some(stripped) = line.strip_prefix('=') {
             let resp = stripped.trim();
@@ -189,7 +186,7 @@ impl KatagoBot {
         debug!("Sending command: {}", cmd);
         let mut stdin = self.stdin.lock().unwrap();
         let stdin = stdin.as_mut().ok_or(KatagoError::ProcessDied)?;
-        
+
         writeln!(stdin, "{}", cmd)?;
         stdin.flush()?;
         Ok(())
@@ -197,7 +194,7 @@ impl KatagoBot {
 
     async fn wait_for_response(&self, timeout_secs: u64) -> Result<String> {
         let duration = Duration::from_secs(timeout_secs);
-        
+
         timeout(duration, async {
             loop {
                 let mut rx = self.response_rx.lock().await;
@@ -237,13 +234,9 @@ impl KatagoBot {
         Ok(())
     }
 
-    pub async fn select_move(
-        &self,
-        moves: &[String],
-        config: &RequestConfig,
-    ) -> Result<String> {
+    pub async fn select_move(&self, moves: &[String], config: &RequestConfig) -> Result<String> {
         info!("Selecting move for position with {} moves", moves.len());
-        
+
         // Reset diagnostics
         {
             let mut diag = self.diagnostics.write().unwrap();
@@ -252,11 +245,11 @@ impl KatagoBot {
 
         let komi = config.komi.unwrap_or(7.5);
         self.set_komi(komi)?;
-        
+
         // Reset board
         self.send_command("clear_board")?;
         self.send_command("clear_cache")?;
-        
+
         self.set_rules(komi, config)?;
 
         // Play moves
@@ -273,10 +266,12 @@ impl KatagoBot {
 
         // Request move
         self.send_command(&format!("genmove {}", color))?;
-        
+
         // Wait for response
-        let response = self.wait_for_response(self.config.move_timeout_secs).await?;
-        
+        let response = self
+            .wait_for_response(self.config.move_timeout_secs)
+            .await?;
+
         if let Some(stripped) = response.strip_prefix('=') {
             let mv = stripped.trim().to_string();
             info!("KataGo selected move: {}", mv);
@@ -286,13 +281,9 @@ impl KatagoBot {
         }
     }
 
-    pub async fn score(
-        &self,
-        moves: &[String],
-        config: &RequestConfig,
-    ) -> Result<Vec<f32>> {
+    pub async fn score(&self, moves: &[String], config: &RequestConfig) -> Result<Vec<f32>> {
         info!("Getting score for position with {} moves", moves.len());
-        
+
         // Reset diagnostics
         {
             let mut diag = self.diagnostics.write().unwrap();
@@ -301,13 +292,13 @@ impl KatagoBot {
 
         let ownership = config.ownership.unwrap_or(true);
         let komi = config.komi.unwrap_or(7.5);
-        
+
         self.set_komi(komi)?;
-        
+
         // Reset board
         self.send_command("clear_board")?;
         self.send_command("clear_cache")?;
-        
+
         self.set_rules(komi, config)?;
 
         // Play moves
@@ -322,10 +313,12 @@ impl KatagoBot {
         // Request ownership analysis
         let ownership_flag = if ownership { "true" } else { "false" };
         self.send_command(&format!("kata-analyze 100 ownership {}", ownership_flag))?;
-        
+
         // Wait for info response
-        let response = self.wait_for_response(self.config.move_timeout_secs).await?;
-        
+        let response = self
+            .wait_for_response(self.config.move_timeout_secs)
+            .await?;
+
         // Parse ownership values if requested
         let mut probs = Vec::new();
         if ownership && response.contains("ownership") {
@@ -338,10 +331,10 @@ impl KatagoBot {
                 }
             }
         }
-        
+
         // Send stop command
         self.send_command("stop")?;
-        
+
         info!("Parsed {} ownership values", probs.len());
         Ok(probs)
     }
