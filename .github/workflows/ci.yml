@@ -61,14 +61,7 @@ jobs:
   docker-base:
     name: Build Base Docker Image
     needs: [check, test, fmt, clippy]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (
-      github.event.head_commit && (
-        contains(join(github.event.head_commit.modified, ','), 'Dockerfile.base') ||
-        contains(join(github.event.head_commit.modified, ','), 'Cargo.toml') ||
-        contains(join(github.event.head_commit.modified, ','), 'Cargo.lock') ||
-        contains(join(github.event.head_commit.modified, ','), 'src/')
-      )
-    )
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.head_commit && (contains(join(github.event.head_commit.modified, ','), 'Dockerfile.base') || contains(join(github.event.head_commit.modified, ','), 'Cargo.toml') || contains(join(github.event.head_commit.modified, ','), 'Cargo.lock') || contains(join(github.event.head_commit.modified, ','), 'src/'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
