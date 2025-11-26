@@ -1,5 +1,10 @@
-# Builder stage for KataGo (needs devel image for nvcc)
+# Modellname als Variable
+ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
+
 FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS katago-builder
+ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -33,8 +38,11 @@ RUN cmake . -DUSE_BACKEND=CUDA -DCUDNN_INCLUDE_DIR=/usr/local/cuda/include \
 # Get the server binary from base image
 FROM ghcr.io/stubbi/katago-server:base AS binary
 
+
 # Final runtime stage
 FROM nvidia/cuda:12.2.0-base-ubuntu22.04
+ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
 
 WORKDIR /app
 
@@ -56,7 +64,7 @@ COPY gtp_config.cfg.example /app/gtp_config.cfg.example
 
 # Download model and configure
 RUN set -ex && \
-  wget -q -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file && \
+  wget -q -O "$KATAGO_MODEL" "https://media.katagotraining.org/uploaded/networks/models/kata1/$KATAGO_MODEL" && \
   chmod +x katago && \
   # Create GPU-optimized configs
   cp config.toml.example config.toml && \
@@ -64,7 +72,8 @@ RUN set -ex && \
   sed -i 's/numSearchThreads = 4/numSearchThreads = 8/' gtp_config.cfg && \
   sed -i 's/maxVisits = 500/maxVisits = 800/' gtp_config.cfg && \
   sed -i 's/# numNNServerThreadsPerModel = 1/numNNServerThreadsPerModel = 2/' gtp_config.cfg && \
-  sed -i 's/# nnMaxBatchSize = 16/nnMaxBatchSize = 32/' gtp_config.cfg
+  sed -i 's/# nnMaxBatchSize = 16/nnMaxBatchSize = 32/' gtp_config.cfg && \
+  sed -i "s|model_path = \".*\"|model_path = \"./$KATAGO_MODEL\"|" config.toml
 
 EXPOSE 2718
 
