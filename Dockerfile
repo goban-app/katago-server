@@ -1,7 +1,3 @@
-# Modellname als Variable
-ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
-ENV KATAGO_MODEL=${KATAGO_MODEL}
-
 
 # Builder stage for KataGo
 
