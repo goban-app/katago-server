@@ -248,10 +248,11 @@ impl KatagoBot {
                     }
 
                     // Collect all analysis output lines (info, rootInfo, ownership, etc.)
-                    if response.starts_with("info ") 
-                        || response.starts_with("rootInfo ") 
+                    if response.starts_with("info ")
+                        || response.starts_with("rootInfo ")
                         || response.starts_with("ownership ")
-                        || response.starts_with("ownershipStdev ") {
+                        || response.starts_with("ownershipStdev ")
+                    {
                         collected_lines.push(response.clone());
 
                         // If we got ownership data, we're done
