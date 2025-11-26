@@ -265,10 +265,15 @@ jobs:
           build-args: |
             BUILDKIT_INLINE_CACHE=1
 
+
+      - name: Create test network
+        run: docker network create test-net-${{ matrix.variant }}
+
       - name: Start container
         run: |
           docker run -d \
             --name test-container-${{ matrix.variant }} \
+            --network test-net-${{ matrix.variant }} \
             katago-server:test-${{ matrix.variant }}
 
       - name: Wait for startup
@@ -307,20 +312,22 @@ jobs:
             fi
           fi
 
+
       - name: Test health endpoint
         run: |
-          docker exec test-container-${{ matrix.variant }} \
-            curl -f http://localhost:2718/health || {
+          docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
+            curl -f http://test-container-${{ matrix.variant }}:2718/health || {
             echo "ERROR: Health check failed"
             exit 1
           }
           echo "Health check passed ✓"
 
+
       - name: Test API endpoint (CPU only)
         if: matrix.variant == 'cpu'
         run: |
-          docker exec test-container-${{ matrix.variant }} \
-            curl -f -X POST http://localhost:2718/score/katago_gtp_bot \
+          docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
+            curl -f -X POST http://test-container-${{ matrix.variant }}:2718/score/katago_gtp_bot \
             -H "Content-Type: application/json" \
             -d '{"board_size":19,"moves":["R4","D16"]}' || {
             echo "ERROR: API endpoint test failed"
@@ -331,7 +338,9 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: docker rm -f test-container-${{ matrix.variant }} || true
+        run: |
+          docker rm -f test-container-${{ matrix.variant }} || true
+          docker network rm test-net-${{ matrix.variant }} || true
 
   docker-publish:
     name: Publish Docker Image (${{ matrix.variant }})
