@@ -8,9 +8,7 @@
 # Stage: chef-planner
 # Prepares the recipe for cargo-chef
 # ------------------------------------------------------------------------------
-FROM rust:1.83-slim AS chef-planner
-
-RUN cargo install cargo-chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.83-slim AS chef-planner
 
 WORKDIR /app
 
@@ -23,9 +21,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Stage: rust-builder
 # Builds the Rust katago-server binary using cargo-chef for optimal caching
 # ------------------------------------------------------------------------------
-FROM rust:1.83-slim AS rust-builder
-
-RUN cargo install cargo-chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.83-slim AS rust-builder
 
 WORKDIR /app
 
