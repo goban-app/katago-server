@@ -100,10 +100,12 @@ jobs:
 
       - name: Create GitHub Release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: .cr-release-packages/*.tgz
           generate_release_notes: true
+          fail_on_unmatched_files: false
+          make_latest: true
           body: |
             ## Helm Chart Release
 
