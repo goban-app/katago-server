@@ -5,10 +5,27 @@
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
+# Stage: chef-planner
+# Prepares the recipe for cargo-chef
+# ------------------------------------------------------------------------------
+FROM rust:1.83-slim AS chef-planner
+
+RUN cargo install cargo-chef
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ------------------------------------------------------------------------------
 # Stage: rust-builder
-# Builds the Rust katago-server binary
+# Builds the Rust katago-server binary using cargo-chef for optimal caching
 # ------------------------------------------------------------------------------
 FROM rust:1.83-slim AS rust-builder
+
+RUN cargo install cargo-chef
 
 WORKDIR /app
 
@@ -18,20 +35,16 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy manifests first for better caching
-COPY Cargo.toml Cargo.lock ./
-
-# Build dependencies only (cached unless Cargo.toml/Cargo.lock changes)
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
+# Build dependencies using cargo-chef (cached unless dependencies change)
+COPY --from=chef-planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
 # Copy source code
+COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
 # Build the actual application (only this layer rebuilds when code changes)
-RUN touch src/main.rs && cargo build --release
+RUN cargo build --release
 
 # ------------------------------------------------------------------------------
 # Stage: base
