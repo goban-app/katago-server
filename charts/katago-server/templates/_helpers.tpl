@@ -65,7 +65,10 @@ Create the name of the service account to use
 Generate the image name with variant
 */}}
 {{- define "katago-server.image" -}}
-{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- $tag := .Values.image.tag -}}
+{{- if not $tag -}}
+{{- $tag = .Chart.AppVersion -}}
+{{- end -}}
 {{- if .Values.image.variant }}
 {{- printf "%s:%s%s" .Values.image.repository $tag .Values.image.variant }}
 {{- else }}
