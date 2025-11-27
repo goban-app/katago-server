@@ -1,12 +1,12 @@
-mod analysis_engine;
 mod api;
 mod config;
 mod error;
-
-#[allow(dead_code)] // GTP-based bot kept for reference, may be useful for future features
 mod katago_bot;
 
-use crate::analysis_engine::AnalysisEngine;
+#[allow(dead_code)] // JSON analysis engine - experimental, not yet working
+mod analysis_engine;
+
+use crate::katago_bot::KatagoBot;
 use crate::api::create_router;
 use crate::config::Config;
 use std::sync::Arc;
@@ -36,11 +36,11 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting KataGo server with config: {:?}", config);
 
-    // Initialize KataGo analysis engine
-    let engine = Arc::new(AnalysisEngine::new(config.katago)?);
+    // Initialize KataGo bot (GTP mode)
+    let bot = Arc::new(KatagoBot::new(config.katago)?);
 
     // Create router with CORS and tracing
-    let app = create_router(engine)
+    let app = create_router(bot)
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

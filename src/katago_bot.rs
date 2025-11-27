@@ -440,6 +440,10 @@ impl KatagoBot {
         self.diagnostics.read().unwrap().clone()
     }
 
+    pub fn model_path(&self) -> &str {
+        &self.config.model_path
+    }
+
     pub async fn clear_cache(&self) -> Result<()> {
         info!("Clearing KataGo cache");
         self.send_command("clear_cache")?;
