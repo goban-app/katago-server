@@ -284,13 +284,13 @@ impl AnalysisEngine {
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        // Convert moves to KataGo format: [["b", "D4"], ["w", "Q16"], ...]
-        // Note: KataGo requires lowercase color codes
+        // Convert moves to KataGo format: [["B", "D4"], ["W", "Q16"], ...]
+        // Note: KataGo official docs show uppercase B/W
         let mut katago_moves = Vec::new();
-        let mut color = "b";
+        let mut color = "B";
         for mv in &request.moves {
             katago_moves.push(vec![color.to_string(), mv.clone()]);
-            color = if color == "b" { "w" } else { "b" };
+            color = if color == "B" { "W" } else { "B" };
         }
 
         let query = AnalysisQuery {
@@ -312,7 +312,7 @@ impl AnalysisEngine {
             // Let analyzeTurns default to analyzing the final position
             analyze_turns: None,
             // Always include maxVisits - KataGo requires this to start analysis
-            max_visits: Some(request.max_visits.unwrap_or(200)),
+            max_visits: Some(request.max_visits.unwrap_or(10)),
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
             include_pv_visits: request.include_pv_visits,

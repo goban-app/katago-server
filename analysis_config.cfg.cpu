@@ -9,14 +9,14 @@ logAllResponses = true
 
 # Analysis behavior
 reportAnalysisWinratesAs = SIDETOMOVE
-maxVisits = 200
+maxVisits = 10
 
 # Threading configuration for CPU
 # numAnalysisThreads: number of positions to analyze in parallel
 # numSearchThreadsPerAnalysisThread: threads per position search
 # Total active threads = numAnalysisThreads * numSearchThreadsPerAnalysisThread
-numAnalysisThreads = 2
-numSearchThreadsPerAnalysisThread = 2
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
 
 # Neural network batching (CPU optimized)
 nnMaxBatchSize = 8
