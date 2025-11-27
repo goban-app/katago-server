@@ -1,28 +1,18 @@
-name: Helm Chart Release
+name: Release Helm Charts
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
-    inputs:
-      chart_version:
-        description: 'Chart version to release (e.g., 0.1.0)'
-        required: false
-        type: string
+    branches:
+      - main
+    paths:
+      - 'charts/**'
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: helm-release-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   release:
-    name: Release Helm Chart
+    name: Release Charts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -40,88 +30,7 @@ jobs:
         with:
           version: 'v3.14.0'
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.chart_version }}" ]; then
-            VERSION="${{ github.event.inputs.chart_version }}"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            VERSION=$(grep '^version:' charts/katago-server/Chart.yaml | awk '{print $2}')
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Chart version: $VERSION"
-
-      - name: Update Chart version
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          sed -i "s/^version:.*/version: $VERSION/" charts/katago-server/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/katago-server/Chart.yaml
-          cat charts/katago-server/Chart.yaml
-
-      - name: Lint Helm Chart
-        run: |
-          helm lint charts/katago-server
-
-      - name: Package Helm Chart
-        run: |
-          helm package charts/katago-server -d .cr-release-packages
-
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: gh-pages
-
-      - name: Initialize gh-pages if needed
-        run: |
-          if [ ! -f gh-pages/index.yaml ]; then
-            echo "Initializing gh-pages with empty index.yaml"
-            mkdir -p gh-pages
-            helm repo index gh-pages --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-          fi
-
-      - name: Copy package to gh-pages
-        run: |
-          mkdir -p gh-pages
-          cp .cr-release-packages/*.tgz gh-pages/
-
-      - name: Update Helm repo index
-        run: |
-          helm repo index gh-pages --url https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }} --merge gh-pages/index.yaml
-
-      - name: Commit and push to gh-pages
-        working-directory: gh-pages
-        run: |
-          git add .
-          git commit -m "Release Helm chart version ${{ steps.version.outputs.version }}" || echo "No changes to commit"
-          git push origin gh-pages
-
-      - name: Create GitHub Release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: .cr-release-packages/*.tgz
-          generate_release_notes: true
-          fail_on_unmatched_files: false
-          make_latest: true
-          body: |
-            ## Helm Chart Release
-
-            To use this Helm chart:
-
-            ```bash
-            # Add the Helm repository
-            helm repo add katago-server https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-            helm repo update
-
-            # Install the chart
-            helm install my-katago-server katago-server/katago-server --version ${{ steps.version.outputs.version }}
-            ```
-
-            Or install directly from this release:
-
-            ```bash
-            helm install my-katago-server https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/katago-server-${{ steps.version.outputs.version }}.tgz
-            ```
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
