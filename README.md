@@ -5,17 +5,19 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
 
-A high-performance REST API server for KataGo, written in Rust using Axum. This is a minimal yet complete implementation following best practices, providing endpoints to query KataGo for move suggestions and board analysis.
+A high-performance REST API server for KataGo, written in Rust using Axum. Provides a comprehensive, versioned API following REST best practices with RFC 7807 error handling for position analysis, move suggestions, and territory evaluation.
 
 ## Features
 
 - 🚀 **High Performance**: Built with Rust and async/await using Tokio
 - 🔒 **Type Safety**: Full type checking with comprehensive error handling
-- 🌐 **REST API**: Clean JSON endpoints for move selection and territory scoring
-- 📊 **Rich Diagnostics**: Returns winning probability, score estimates, and best move candidates
+- 🌐 **Versioned REST API**: `/api/v1/` endpoints with comprehensive position analysis
+- 📊 **Rich Analysis**: Returns win probability, score estimates, move candidates with visits and priors
+- 🎯 **Territory Ownership**: Detailed ownership predictions for each intersection
 - ⚙️ **Configurable**: Support for TOML config files and environment variables
 - 🔄 **Process Management**: Automatic KataGo process lifecycle management
-- 🎯 **Production Ready**: CORS support, structured logging, and health checks
+- 🏗️ **Standards Compliant**: RFC 7807 Problem Details for HTTP error responses
+- 🎯 **Production Ready**: CORS support, structured logging, health checks, and cache management
 
 ## Prerequisites
 
@@ -173,121 +175,168 @@ The server will start on `http://0.0.0.0:2718` (or your configured port).
 
 ## API Endpoints
 
-### 1. Select Move
+The server provides a versioned REST API (`/api/v1/`) following best practices with RFC 7807 error handling.
 
-Get the best move for a given position.
+### 1. Comprehensive Analysis
 
-**Endpoint:** `POST /select-move/katago_gtp_bot`
+Analyze a Go position with comprehensive information including move candidates, win probability, score estimation, and optional territory ownership.
 
-**Request:**
-```json
-{
-  "board_size": 19,
-  "moves": ["Q16", "D4", "R4"],
-  "config": {
-    "komi": 7.5,
-    "request_id": "optional-id"
-  }
-}
-```
-
-**Response:**
-```json
-{
-  "bot_move": "D16",
-  "diagnostics": {
-    "winprob": 0.5234,
-    "score": 2.5,
-    "bot_move": "D16",
-    "best_ten": [
-      {"move": "D16", "psv": 842},
-      {"move": "Q4", "psv": 835},
-      {"move": "D17", "psv": 820}
-    ]
-  },
-  "request_id": "optional-id"
-}
-```
-
-### 2. Score Position
-
-Get territory ownership probabilities for each intersection.
-
-**Endpoint:** `POST /score/katago_gtp_bot`
+**Endpoint:** `POST /api/v1/analysis`
 
 **Request:**
 ```json
 {
-  "board_size": 19,
-  "moves": ["Q16", "D4", "R4", "D16"],
-  "config": {
-    "komi": 7.5,
-    "ownership": true,
-    "request_id": "optional-id"
-  }
+  "moves": ["D4", "Q16", "R4"],
+  "komi": 7.5,
+  "rules": "chinese",
+  "boardXSize": 19,
+  "boardYSize": 19,
+  "includeOwnership": true,
+  "includePolicy": false,
+  "maxVisits": 100,
+  "requestId": "optional-id"
 }
 ```
+
+**Request Parameters:**
+- `moves` (required): Array of moves in coordinate notation (e.g., ["D4", "Q16"])
+- `komi` (optional, default: 7.5): Komi value
+- `rules` (optional): Game rules ("chinese", "japanese", "korean", "tromp-taylor", etc.)
+- `boardXSize` (optional, default: 19): Board width
+- `boardYSize` (optional, default: 19): Board height
+- `includeOwnership` (optional): Include territory ownership predictions
+- `includePolicy` (optional): Include raw neural network policy
+- `includePVVisits` (optional): Include visit counts in principal variations
+- `maxVisits` (optional): Override search visit limit
+- `analysisPVLen` (optional): Length of principal variation to return
+- `requestId` (optional): Request identifier echoed back in response
 
 **Response:**
 ```json
 {
-  "probs": [0.95, 0.89, -0.12, ..., 0.43],
-  "diagnostics": {
-    "winprob": 0.5123,
-    "score": 1.5,
-    "bot_move": "",
-    "best_ten": []
+  "id": "optional-id",
+  "turnNumber": 3,
+  "isDuringSearch": false,
+  "moveInfos": [
+    {
+      "moveCoord": "D16",
+      "visits": 142,
+      "winrate": 0.523,
+      "scoreMean": 2.5,
+      "scoreStdev": 8.2,
+      "scoreLead": 2.5,
+      "utility": 0.031,
+      "utilityLcb": 0.025,
+      "lcb": 0.515,
+      "prior": 0.18,
+      "order": 0,
+      "pv": ["D16", "Q4", "D10"],
+      "pvVisits": [142, 95, 82]
+    }
+  ],
+  "rootInfo": {
+    "winrate": 0.512,
+    "scoreLead": 1.5,
+    "utility": 0.015,
+    "visits": 500,
+    "currentPlayer": "B",
+    "rawWinrate": 0.508,
+    "rawScoreMean": 1.2
   },
-  "request_id": "optional-id"
+  "ownership": [0.85, 0.92, -0.15, ...]
 }
 ```
 
-The `probs` array contains 361 values (for 19x19) representing ownership probability for each intersection (-1.0 = definitely white, +1.0 = definitely black).
+### 2. Version Information
+
+Get server and KataGo version information.
+
+**Endpoint:** `GET /api/v1/version`
+
+**Response:**
+```json
+{
+  "server": {
+    "name": "katago-server",
+    "version": "0.1.0"
+  },
+  "katago": {
+    "version": "1.15.3",
+    "gitHash": "abc123def"
+  }
+}
+```
 
 ### 3. Health Check
 
-**Endpoint:** `GET /health`
+**Endpoint:** `GET /api/v1/health`
 
 **Response:**
 ```json
 {
-  "status": "ok"
+  "status": "healthy",
+  "timestamp": "2025-11-27T12:34:56Z",
+  "uptime": 3600
+}
+```
+
+### 4. Clear Cache
+
+Clear the KataGo neural network cache to free memory.
+
+**Endpoint:** `POST /api/v1/cache/clear`
+
+**Response:**
+```json
+{
+  "status": "cleared",
+  "timestamp": "2025-11-27T12:34:56Z"
 }
 ```
 
 ## Testing with curl
 
 ```bash
-# Select move
-curl -X POST http://localhost:2718/select-move/katago_gtp_bot \
+# Analyze a position
+curl -X POST http://localhost:2718/api/v1/analysis \
   -H "Content-Type: application/json" \
   -d '{
-    "board_size": 19,
-    "moves": ["R4", "D16"],
-    "config": {"komi": 7.5}
+    "moves": ["D4", "Q16"],
+    "komi": 7.5,
+    "rules": "chinese",
+    "includeOwnership": true
   }'
 
-# Get territory ownership
-curl -X POST http://localhost:2718/score/katago_gtp_bot \
-  -H "Content-Type: application/json" \
-  -d '{
-    "board_size": 19,
-    "moves": ["R4", "D16"],
-    "config": {"komi": 7.5, "ownership": true}
-  }'
+# Get version info
+curl http://localhost:2718/api/v1/version
 
 # Health check
-curl http://localhost:2718/health
+curl http://localhost:2718/api/v1/health
+
+# Clear cache
+curl -X POST http://localhost:2718/api/v1/cache/clear
 ```
 
-## Request Configuration Options
+## Error Responses
 
-The `config` field in requests supports:
+All errors follow RFC 7807 Problem Details format:
 
-- `komi` (float, default: 7.5): The komi value
-- `client` (string, optional): Client identifier (e.g., "kifucam")
-- `request_id` (string, optional): Request ID echoed back in response
-- `ownership` (bool, default: true): Whether to return ownership data in score endpoint
+```json
+{
+  "type": "https://katago-server/problems/timeout",
+  "title": "Analysis Timeout",
+  "status": 504,
+  "detail": "KataGo analysis timed out after 20 seconds",
+  "instance": "/api/v1/analysis",
+  "requestId": "req-123"
+}
+```
+
+Common error types:
+- `invalid-request` (400): Malformed request
+- `timeout` (504): Analysis timeout
+- `process-died` (503): KataGo process crashed
+- `internal-error` (500): Unexpected server error
 
 ## Architecture
 

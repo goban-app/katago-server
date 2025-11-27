@@ -51,10 +51,12 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
     info!("Listening on http://{}", addr);
+    info!("");
     info!("API endpoints:");
-    info!("  POST /select-move/katago_gtp_bot - Get best move");
-    info!("  POST /score/katago_gtp_bot - Get territory ownership");
-    info!("  GET  /health - Health check");
+    info!("  POST /api/v1/analysis      - Comprehensive position analysis");
+    info!("  GET  /api/v1/health        - Health check with details");
+    info!("  GET  /api/v1/version       - Server and KataGo version");
+    info!("  POST /api/v1/cache/clear   - Clear neural network cache");
 
     axum::serve(listener, app).await?;
 

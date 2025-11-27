@@ -439,6 +439,14 @@ impl KatagoBot {
     pub fn diagnostics(&self) -> Diagnostics {
         self.diagnostics.read().unwrap().clone()
     }
+
+    pub async fn clear_cache(&self) -> Result<()> {
+        info!("Clearing KataGo cache");
+        self.send_command("clear_cache")?;
+        // Wait for acknowledgment
+        self.wait_for_response(5).await?;
+        Ok(())
+    }
 }
 
 impl Drop for KatagoBot {

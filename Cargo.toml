@@ -31,6 +31,12 @@ thiserror = "1.0"
 # Regex for parsing
 regex = "1.10"
 
+# UUID generation
+uuid = { version = "1.11", features = ["v4"] }
+
+# Date/time handling
+chrono = { version = "0.4", features = ["serde"] }
+
 [profile.release]
 opt-level = 3
 lto = "thin"
