@@ -4,6 +4,8 @@
 # === Search Settings ===
 # Number of threads to use for the search
 numSearchThreads = 4
+# Analysis engine threads (required for JSON analysis mode)
+numAnalysisThreads = 4
 
 # Maximum number of visits during search
 maxVisits = 500

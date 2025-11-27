@@ -4,6 +4,8 @@
 # === Search Settings ===
 # Reduced threads for CPU efficiency
 numSearchThreads = 2
+# Analysis engine threads (required for JSON analysis mode)
+numAnalysisThreads = 2
 
 # Reduced visits for faster responses on CPU
 maxVisits = 200
