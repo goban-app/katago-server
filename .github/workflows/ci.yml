@@ -237,7 +237,7 @@ jobs:
       - name: Test health endpoint
         run: |
           docker run --rm --network test-net curlimages/curl:latest \
-            curl -f http://test-container:2718/health || {
+            curl -f http://test-container:2718/api/v1/health || {
             echo "ERROR: Health check failed"
             exit 1
           }

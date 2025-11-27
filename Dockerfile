@@ -68,7 +68,7 @@ EXPOSE 2718
 ENV RUST_LOG=debug
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:2718/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:2718/api/v1/health || exit 1
 
 CMD ["./katago-server"]
 
@@ -206,7 +206,7 @@ EXPOSE 2718
 ENV RUST_LOG=debug
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:2718/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:2718/api/v1/health || exit 1
 
 CMD ["./katago-server"]
 
