@@ -7,9 +7,10 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::thread;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex as TokioMutex};
+use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
+use std::collections::HashMap;
 
 /// JSON request format for KataGo analysis engine
 #[derive(Debug, Serialize)]
@@ -95,21 +96,21 @@ pub struct AnalysisEngine {
     config: KatagoConfig,
     process: Arc<StdMutex<Option<Child>>>,
     stdin: Arc<StdMutex<Option<ChildStdin>>>,
-    response_rx: Arc<TokioMutex<mpsc::UnboundedReceiver<String>>>,
+    pending_requests: Arc<StdMutex<HashMap<String, oneshot::Sender<String>>>>,
 }
 
 impl AnalysisEngine {
     pub fn new(config: KatagoConfig) -> Result<Self> {
-        let (response_tx, response_rx) = mpsc::unbounded_channel();
+        let pending_requests = Arc::new(StdMutex::new(HashMap::new()));
 
         let mut engine = Self {
             config: config.clone(),
             process: Arc::new(StdMutex::new(None)),
             stdin: Arc::new(StdMutex::new(None)),
-            response_rx: Arc::new(TokioMutex::new(response_rx)),
+            pending_requests: pending_requests.clone(),
         };
 
-        engine.start_process(response_tx)?;
+        engine.start_process(pending_requests)?;
 
         // Wait a bit for initialization
         thread::sleep(Duration::from_millis(500));
@@ -117,7 +118,10 @@ impl AnalysisEngine {
         Ok(engine)
     }
 
-    fn start_process(&mut self, response_tx: mpsc::UnboundedSender<String>) -> Result<()> {
+    fn start_process(
+        &mut self,
+        pending_requests: Arc<StdMutex<HashMap<String, oneshot::Sender<String>>>>,
+    ) -> Result<()> {
         info!("Starting KataGo analysis engine");
         info!(
             "Config: katago={}, model={}, config={}",
@@ -168,14 +172,38 @@ impl AnalysisEngine {
 
         // Spawn stdout reader thread
         thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                match line {
-                    Ok(line) => {
-                        debug!("KataGo analysis: {}", line);
-                        if let Err(e) = response_tx.send(line) {
-                            error!("Failed to send response: {}", e);
-                            break;
+            let mut reader = BufReader::new(stdout);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) => {
+                        info!("KataGo analysis stdout closed (EOF)");
+                        break;
+                    }
+                    Ok(_) => {
+                        let trimmed = line.trim();
+                        debug!("KataGo analysis raw output: {}", trimmed);
+                        
+                        // Parse ID from response to route it
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                            if let Some(id) = value.get("id").and_then(|id| id.as_str()) {
+                                let mut requests = pending_requests.lock().unwrap();
+                                if let Some(sender) = requests.remove(id) {
+                                    if let Err(_) = sender.send(trimmed.to_string()) {
+                                        warn!("Failed to send response to waiter for ID: {}", id);
+                                    }
+                                } else {
+                                    // This might be a log message or unexpected response
+                                    debug!("Received response for unknown or timed-out ID: {}", id);
+                                }
+                            } else {
+                                // Maybe a log line or something without ID
+                                debug!("Received JSON without ID: {}", trimmed);
+                            }
+                        } else {
+                            // Not JSON, probably a log line
+                            debug!("Received non-JSON output: {}", trimmed);
                         }
                     }
                     Err(e) => {
@@ -184,7 +212,7 @@ impl AnalysisEngine {
                     }
                 }
             }
-            info!("KataGo analysis stdout closed");
+            info!("KataGo analysis stdout reader thread exiting");
         });
 
         Ok(())
@@ -198,60 +226,54 @@ impl AnalysisEngine {
         let stdin = stdin.as_mut().ok_or(KatagoError::ProcessDied)?;
 
         writeln!(stdin, "{}", json)?;
-        stdin.flush()?;
+        debug!("Written query to stdin, flushing...");
+        match stdin.flush() {
+            Ok(_) => debug!("Stdin flushed successfully"),
+            Err(e) => error!("Failed to flush stdin: {}", e),
+        }
         Ok(())
     }
 
     async fn wait_for_response(&self, id: &str, timeout_secs: u64) -> Result<AnalysisResult> {
+        let (tx, rx) = oneshot::channel();
+        
+        {
+            let mut requests = self.pending_requests.lock().unwrap();
+            requests.insert(id.to_string(), tx);
+        }
+
         let duration = Duration::from_secs(timeout_secs);
 
-        timeout(duration, async {
-            loop {
-                let mut rx = self.response_rx.lock().await;
-                if let Some(response) = rx.recv().await {
-                    debug!(
-                        "Received response from KataGo (length: {}): {}",
-                        response.len(),
-                        if response.len() > 200 {
-                            &response[..200]
-                        } else {
-                            &response
-                        }
-                    );
-
-                    // Try to parse as JSON
-                    match serde_json::from_str::<AnalysisResult>(&response) {
-                        Ok(result) => {
-                            if result.id == id {
-                                debug!("Matched response ID, returning result");
-                                return Ok(result);
-                            } else {
-                                debug!(
-                                    "Response ID mismatch: expected '{}', got '{}'",
-                                    id, result.id
-                                );
+        match timeout(duration, rx).await {
+            Ok(Ok(response)) => {
+                // Parse the response
+                match serde_json::from_str::<AnalysisResult>(&response) {
+                    Ok(result) => Ok(result),
+                    Err(e) => {
+                        // Check for error response
+                        if let Ok(error) = serde_json::from_str::<serde_json::Value>(&response) {
+                            if let Some(err_msg) = error.get("error") {
+                                error!("KataGo returned error: {}", err_msg);
+                                return Err(KatagoError::ResponseError(err_msg.to_string()));
                             }
                         }
-                        Err(e) => {
-                            debug!("Failed to parse as AnalysisResult: {}", e);
-                            // Also handle error responses
-                            if let Ok(error) = serde_json::from_str::<serde_json::Value>(&response)
-                            {
-                                if let Some(err_msg) = error.get("error") {
-                                    error!("KataGo returned error: {}", err_msg);
-                                    return Err(KatagoError::ResponseError(err_msg.to_string()));
-                                }
-                            }
-                        }
+                        Err(KatagoError::ParseError(e.to_string()))
                     }
-                } else {
-                    error!("Response channel closed - KataGo process died");
-                    return Err(KatagoError::ProcessDied);
                 }
             }
-        })
-        .await
-        .map_err(|_| KatagoError::Timeout(timeout_secs))?
+            Ok(Err(_)) => {
+                // Sender dropped (process died?)
+                Err(KatagoError::ProcessDied)
+            }
+            Err(_) => {
+                // Timeout
+                {
+                    let mut requests = self.pending_requests.lock().unwrap();
+                    requests.remove(id);
+                }
+                Err(KatagoError::Timeout(timeout_secs))
+            }
+        }
     }
 
     pub async fn analyze(&self, request: &AnalysisRequest) -> Result<AnalysisResponse> {
@@ -371,41 +393,54 @@ impl AnalysisEngine {
 
         let json = serde_json::to_string(&query)?;
 
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut requests = self.pending_requests.lock().unwrap();
+            requests.insert(query_id.clone(), tx);
+        }
+
         // Send query (ensure mutex is dropped before await)
         {
             let mut stdin = self.stdin.lock().unwrap();
             let stdin = stdin.as_mut().ok_or(KatagoError::ProcessDied)?;
             writeln!(stdin, "{}", json)?;
-            stdin.flush()?;
+            debug!("Written version query to stdin, flushing...");
+            match stdin.flush() {
+                Ok(_) => debug!("Stdin flushed successfully"),
+                Err(e) => error!("Failed to flush stdin: {}", e),
+            }
         } // Mutex guard dropped here
 
         // Wait for version response
         let duration = Duration::from_secs(5);
-        timeout(duration, async {
-            loop {
-                let mut rx = self.response_rx.lock().await;
-                if let Some(response) = rx.recv().await {
-                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
-                        if value.get("id").and_then(|id| id.as_str()) == Some(&query_id) {
-                            let version = value
-                                .get("version")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            let git_hash = value
-                                .get("git_hash")
-                                .and_then(|h| h.as_str())
-                                .map(|s| s.to_string());
-                            return Ok((version, git_hash));
-                        }
+        
+        match timeout(duration, rx).await {
+            Ok(Ok(response)) => {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
+                    if value.get("id").and_then(|id| id.as_str()) == Some(&query_id) {
+                        let version = value
+                            .get("version")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let git_hash = value
+                            .get("git_hash")
+                            .and_then(|h| h.as_str())
+                            .map(|s| s.to_string());
+                        return Ok((version, git_hash));
                     }
-                } else {
-                    return Err(KatagoError::ProcessDied);
                 }
+                Err(KatagoError::ParseError("Failed to parse version response".to_string()))
             }
-        })
-        .await
-        .map_err(|_| KatagoError::Timeout(5))?
+            Ok(Err(_)) => Err(KatagoError::ProcessDied),
+            Err(_) => {
+                {
+                    let mut requests = self.pending_requests.lock().unwrap();
+                    requests.remove(&query_id);
+                }
+                Err(KatagoError::Timeout(5))
+            }
+        }
     }
 
     pub fn model_path(&self) -> &str {
