@@ -284,13 +284,13 @@ impl AnalysisEngine {
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        // Convert moves to KataGo format: [["B", "D4"], ["W", "Q16"], ...]
-        // Note: KataGo official docs show uppercase B/W
+        // Convert moves to KataGo format: [["b", "D4"], ["w", "Q16"], ...]
+        // Note: KataGo requires lowercase b/w (confirmed by Python implementation and testing)
         let mut katago_moves = Vec::new();
-        let mut color = "B";
+        let mut color = "b";
         for mv in &request.moves {
             katago_moves.push(vec![color.to_string(), mv.clone()]);
-            color = if color == "B" { "W" } else { "B" };
+            color = if color == "b" { "w" } else { "b" };
         }
 
         let query = AnalysisQuery {
