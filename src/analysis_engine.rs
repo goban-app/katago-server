@@ -204,19 +204,43 @@ impl AnalysisEngine {
             loop {
                 let mut rx = self.response_rx.lock().await;
                 if let Some(response) = rx.recv().await {
-                    // Try to parse as JSON
-                    if let Ok(result) = serde_json::from_str::<AnalysisResult>(&response) {
-                        if result.id == id {
-                            return Ok(result);
+                    debug!(
+                        "Received response from KataGo (length: {}): {}",
+                        response.len(),
+                        if response.len() > 200 {
+                            &response[..200]
+                        } else {
+                            &response
                         }
-                    }
-                    // Also handle error responses
-                    if let Ok(error) = serde_json::from_str::<serde_json::Value>(&response) {
-                        if let Some(err_msg) = error.get("error") {
-                            return Err(KatagoError::ResponseError(err_msg.to_string()));
+                    );
+
+                    // Try to parse as JSON
+                    match serde_json::from_str::<AnalysisResult>(&response) {
+                        Ok(result) => {
+                            if result.id == id {
+                                debug!("Matched response ID, returning result");
+                                return Ok(result);
+                            } else {
+                                debug!(
+                                    "Response ID mismatch: expected '{}', got '{}'",
+                                    id, result.id
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            debug!("Failed to parse as AnalysisResult: {}", e);
+                            // Also handle error responses
+                            if let Ok(error) = serde_json::from_str::<serde_json::Value>(&response)
+                            {
+                                if let Some(err_msg) = error.get("error") {
+                                    error!("KataGo returned error: {}", err_msg);
+                                    return Err(KatagoError::ResponseError(err_msg.to_string()));
+                                }
+                            }
                         }
                     }
                 } else {
+                    error!("Response channel closed - KataGo process died");
                     return Err(KatagoError::ProcessDied);
                 }
             }
@@ -258,7 +282,8 @@ impl AnalysisEngine {
             board_x_size: request.board_x_size,
             board_y_size: request.board_y_size,
             analyze_turns: vec![turn_to_analyze],
-            max_visits: request.max_visits,
+            // Always include maxVisits - KataGo requires this to start analysis
+            max_visits: Some(request.max_visits.unwrap_or(200)),
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
             include_pv_visits: request.include_pv_visits,
