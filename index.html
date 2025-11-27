@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KataGo Server Helm Repository</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        pre {
+            background-color: #f4f4f4;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            overflow-x: auto;
+            border-radius: 5px;
+        }
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .badge {
+            display: inline-block;
+            margin-right: 5px;
+            margin-bottom: 10px;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 KataGo Server Helm Repository</h1>
+
+    <p>
+        <span class="badge"><img src="https://img.shields.io/badge/Helm-v3-blue" alt="Helm v3"></span>
+        <span class="badge"><a href="https://github.com/stubbi/katago-server"><img src="https://img.shields.io/badge/GitHub-Repository-black" alt="GitHub"></a></span>
+    </p>
+
+    <p>
+        Welcome to the Helm chart repository for <strong>KataGo Server</strong> - a high-performance REST API server for KataGo, written in Rust.
+    </p>
+
+    <h2>📦 Installation</h2>
+
+    <h3>Add the Helm Repository</h3>
+    <pre><code>helm repo add katago-server https://stubbi.github.io/katago-server
+helm repo update</code></pre>
+
+    <h3>Install the Chart</h3>
+    <pre><code>helm install my-katago-server katago-server/katago-server</code></pre>
+
+    <h3>Install with Custom Values</h3>
+    <pre><code>helm install my-katago-server katago-server/katago-server \
+  --set config.logLevel=debug \
+  --set resources.limits.cpu=4000m \
+  --set resources.limits.memory=2Gi</code></pre>
+
+    <h2>🔧 Configuration</h2>
+
+    <p>The chart supports extensive configuration options. Common configurations include:</p>
+
+    <ul>
+        <li><strong>GPU Support:</strong> Enable NVIDIA or AMD GPU acceleration</li>
+        <li><strong>Custom Models:</strong> Download custom KataGo models via init containers</li>
+        <li><strong>Resource Limits:</strong> Configure CPU and memory limits</li>
+        <li><strong>Ingress:</strong> Expose the service with Ingress controllers</li>
+        <li><strong>Autoscaling:</strong> Enable HPA for automatic scaling</li>
+    </ul>
+
+    <p>For all configuration options, see the <a href="https://github.com/stubbi/katago-server/tree/main/charts/katago-server">chart documentation</a>.</p>
+
+    <h2>📊 Available Charts</h2>
+
+    <p>View available chart versions in <a href="index.yaml">index.yaml</a>.</p>
+
+    <h2>🔗 Links</h2>
+
+    <ul>
+        <li><a href="https://github.com/stubbi/katago-server">GitHub Repository</a></li>
+        <li><a href="https://github.com/stubbi/katago-server/tree/main/charts/katago-server">Chart Documentation</a></li>
+        <li><a href="https://github.com/stubbi/katago-server/blob/main/README.md">KataGo Server README</a></li>
+        <li><a href="https://github.com/lightvector/KataGo">KataGo Project</a></li>
+    </ul>
+
+    <div class="footer">
+        <p>
+            This Helm repository is automatically updated via GitHub Actions when new chart versions are released.
+            For issues or contributions, visit the <a href="https://github.com/stubbi/katago-server/issues">issue tracker</a>.
+        </p>
+    </div>
+</body>
+</html>
