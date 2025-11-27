@@ -1,5 +1,4 @@
-use crate::config::RequestConfig;
-use crate::katago_bot::KatagoBot;
+use crate::analysis_engine::AnalysisEngine;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -11,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::error;
 
-pub type AppState = Arc<KatagoBot>;
+pub type AppState = Arc<AnalysisEngine>;
 
 // ============================================================================
 // New V1 API Types
@@ -350,13 +349,13 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
-pub fn create_router(bot: AppState) -> Router {
+pub fn create_router(engine: AppState) -> Router {
     Router::new()
         .route("/api/v1/analysis", post(v1_analysis))
         .route("/api/v1/health", get(v1_health))
         .route("/api/v1/version", get(v1_version))
         .route("/api/v1/cache/clear", post(v1_cache_clear))
-        .with_state(bot)
+        .with_state(engine)
 }
 
 // ============================================================================
@@ -365,7 +364,7 @@ pub fn create_router(bot: AppState) -> Router {
 
 #[axum::debug_handler]
 async fn v1_analysis(
-    State(bot): State<AppState>,
+    State(engine): State<AppState>,
     Json(request): Json<AnalysisRequest>,
 ) -> std::result::Result<Json<AnalysisResponse>, ApiError> {
     let request_id = request
@@ -373,58 +372,17 @@ async fn v1_analysis(
         .clone()
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    // Convert V1 API request to legacy RequestConfig format
-    let config = RequestConfig {
-        komi: request.komi,
-        ownership: request.include_ownership,
-        client: None,
-        request_id: Some(request_id.clone()),
-    };
-
-    // Use GTP-based kata-analyze to get ownership and diagnostics
-    let ownership = bot
-        .score(&request.moves, &config)
+    // Use JSON analysis engine for full move analysis
+    let response = engine
+        .analyze(&request)
         .await
         .map_err(|e| ApiError::from(e).with_request_id(request_id.clone()))?;
-
-    let diag = bot.diagnostics();
-
-    // Map GTP response to V1 API format
-    let root_info = Some(RootInfo {
-        winrate: diag.winprob,
-        score_lead: diag.score,
-        utility: 0.0, // Not available from GTP
-        visits: 0,    // Not available from GTP
-        current_player: if request.moves.len() % 2 == 0 {
-            "B".to_string()
-        } else {
-            "W".to_string()
-        },
-        raw_winrate: None,
-        raw_score_mean: None,
-        raw_st_score_error: None,
-    });
-
-    let response = AnalysisResponse {
-        id: request_id,
-        turn_number: request.moves.len() as u32,
-        is_during_search: false,
-        move_infos: Some(vec![]), // GTP doesn't provide per-move analysis
-        root_info,
-        ownership: if ownership.is_empty() {
-            None
-        } else {
-            Some(ownership)
-        },
-        ownership_stdev: None,
-        policy: None,
-    };
 
     Ok(Json(response))
 }
 
 #[axum::debug_handler]
-async fn v1_health(State(_bot): State<AppState>) -> impl IntoResponse {
+async fn v1_health(State(_engine): State<AppState>) -> impl IntoResponse {
     use chrono::Utc;
 
     Json(HealthResponse {
@@ -436,32 +394,39 @@ async fn v1_health(State(_bot): State<AppState>) -> impl IntoResponse {
 
 #[axum::debug_handler]
 async fn v1_version(
-    State(bot): State<AppState>,
+    State(engine): State<AppState>,
 ) -> std::result::Result<Json<VersionResponse>, ApiError> {
     // Get model name (filename only, not full path for security)
-    let model_name = std::path::Path::new(bot.model_path())
+    let model_name = std::path::Path::new(engine.model_path())
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("unknown")
         .to_string();
+
+    // Query KataGo version from the analysis engine
+    let katago_info = engine
+        .query_version()
+        .await
+        .ok()
+        .map(|(version, git_hash)| KatagoVersion { version, git_hash });
 
     Ok(Json(VersionResponse {
         server: ServerVersion {
             name: "katago-server".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
-        katago: None, // KataGo version not available in GTP mode
+        katago: katago_info,
         model: ModelInfo { name: model_name },
     }))
 }
 
 #[axum::debug_handler]
 async fn v1_cache_clear(
-    State(bot): State<AppState>,
+    State(engine): State<AppState>,
 ) -> std::result::Result<Json<CacheClearResponse>, ApiError> {
     use chrono::Utc;
 
-    bot.clear_cache().await?;
+    engine.clear_cache().await?;
 
     Ok(Json(CacheClearResponse {
         status: "cleared".to_string(),
