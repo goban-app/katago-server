@@ -88,7 +88,7 @@ resources: {}
 
 livenessProbe:
   httpGet:
-    path: /health
+    path: /api/v1/health
     port: http
   initialDelaySeconds: 30
   periodSeconds: 10
@@ -97,7 +97,7 @@ livenessProbe:
 
 readinessProbe:
   httpGet:
-    path: /health
+    path: /api/v1/health
     port: http
   initialDelaySeconds: 15
   periodSeconds: 5
@@ -106,7 +106,7 @@ readinessProbe:
 
 startupProbe:
   httpGet:
-    path: /health
+    path: /api/v1/health
     port: http
   initialDelaySeconds: 10
   periodSeconds: 5
