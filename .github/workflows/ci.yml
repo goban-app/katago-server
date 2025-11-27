@@ -47,7 +47,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: "rust-cache"
-      - run: cargo test --all-features
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo nextest run --all-features
 
   fmt:
     name: Rustfmt
@@ -77,7 +80,7 @@ jobs:
   # ===========================================================================
   docker-verify:
     name: Verify Docker Build (${{ matrix.variant }})
-    needs: [check, test, fmt, clippy]
+    needs: [check, test]  # Start Docker builds early, fmt/clippy can run in parallel
     runs-on: ubuntu-latest
 
     strategy:
@@ -151,6 +154,29 @@ jobs:
           build-args: |
             GIT_SHA=${{ github.sha }}
 
+      # Build CPU image for amd64 only and export for smoke testing
+      - name: Build CPU image for testing
+        if: matrix.variant == 'cpu'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: cpu
+          load: true
+          tags: katago-server:test-cpu
+          platforms: linux/amd64
+          cache-from: |
+            type=gha,scope=cpu-${{ github.ref_name }}
+            type=gha,scope=cpu-main
+          outputs: type=docker,dest=/tmp/cpu-image.tar
+
+      - name: Upload CPU image for testing
+        if: matrix.variant == 'cpu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-docker-image
+          path: /tmp/cpu-image.tar
+          retention-days: 1
+
       - name: Generate artifact attestation
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/attest-build-provenance@v1
@@ -168,23 +194,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build CPU image for testing
-        uses: docker/build-push-action@v5
+      - name: Download CPU image
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          target: cpu
-          load: true
-          tags: katago-server:test-cpu
-          platforms: linux/amd64
-          cache-from: |
-            type=gha,scope=cpu-${{ github.ref_name }}
-            type=gha,scope=cpu-main
+          name: cpu-docker-image
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load --input /tmp/cpu-image.tar
 
       - name: Create test network
         run: docker network create test-net
