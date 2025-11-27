@@ -119,6 +119,10 @@ impl AnalysisEngine {
 
     fn start_process(&mut self, response_tx: mpsc::UnboundedSender<String>) -> Result<()> {
         info!("Starting KataGo analysis engine");
+        info!(
+            "Config: katago={}, model={}, config={}",
+            self.config.katago_path, self.config.model_path, self.config.config_path
+        );
 
         let mut cmd = Command::new(&self.config.katago_path)
             .arg("analysis")
