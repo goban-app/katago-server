@@ -1,9 +1,9 @@
 # KataGo Server (Rust)
 
 [![CI](https://github.com/stubbi/katago-server/actions/workflows/ci.yml/badge.svg)](https://github.com/stubbi/katago-server/actions/workflows/ci.yml)
-[![Docker Image](https://img.shields.io/badge/docker-latest%20%7C%20latest--gpu%20%7C%20latest--minimal-44cc11)](https://github.com/stubbi/katago-server/pkgs/container/katago-server)
+[![Docker Image](https://img.shields.io/badge/docker-latest%20%7C%20latest--minimal-44cc11)](https://github.com/stubbi/katago-server/pkgs/container/katago-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
 
 A high-performance REST API server for KataGo, written in Rust using Axum. This is a minimal yet complete implementation following best practices, providing endpoints to query KataGo for move suggestions and board analysis.
 
@@ -34,13 +34,11 @@ The easiest way to get started is using the pre-built Docker image:
 # CPU version (recommended for getting started)
 docker pull ghcr.io/stubbi/katago-server:latest
 docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
-
-# GPU version (requires NVIDIA GPU and nvidia-docker)
-docker pull ghcr.io/stubbi/katago-server:latest-gpu
-docker run --gpus all -p 2718:2718 ghcr.io/stubbi/katago-server:latest-gpu
 ```
 
 The server will be available at `http://localhost:2718`.
+
+**Note:** GPU builds are not currently published. Use the CPU version or build your own GPU image with `docker build --target gpu -t katago-server:gpu .`
 
 See the [Docker Image](#docker-image) section for more variants and configuration options.
 
@@ -79,10 +77,13 @@ chmod +x katago
 Download from the KataGo training networks:
 
 ```bash
-# 15-block model (faster, ~120MB, suitable for CPU)
+# 15-block model (faster, ~120MB, suitable for low-end CPU)
 wget -O model.bin.gz https://katagotraining.org/api/networks/kata1-b15c192-s1672170752-d466197061/network_file
 
-# 40-block model (stronger, ~450MB, recommended for GPU)
+# 28-block model (balanced, ~200MB, recommended for CPU - used in Docker images)
+wget -O model.bin.gz https://katagotraining.org/api/networks/kata1-b28c512nbt-s11923456768-d5584765134/network_file
+
+# 40-block model (stronger, ~450MB, recommended for GPU builds)
 wget -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file
 ```
 
@@ -445,15 +446,15 @@ This project is provided as-is for educational and production use. Please ensure
 
 ## Docker Image
 
-Pre-built Docker images are automatically published to GitHub Container Registry with three variants:
+Pre-built Docker images are automatically published to GitHub Container Registry with two variants:
 
 ### Image Variants
 
 #### 1. CPU (Default) - `latest`
-**Best for**: Testing, development, moderate usage
-- **Model**: 15-block network (~120MB) for faster downloads
+**Best for**: Testing, development, moderate usage, production
+- **Model**: 28-block network (~200MB) for balanced performance
 - **KataGo**: Eigen build (broad CPU compatibility)
-- **Performance**: Suitable for casual play and development
+- **Performance**: Suitable for casual to serious play
 - **Size**: ~80MB compressed
 - **Requirements**: Any x86_64 or ARM64 system
 - **Memory**: ~500MB RAM
@@ -463,21 +464,7 @@ docker pull ghcr.io/stubbi/katago-server:latest
 docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
 ```
 
-#### 2. GPU - `latest-gpu`
-**Best for**: Production, high-performance analysis
-- **Model**: 40-block network (~450MB) for strong play
-- **KataGo**: CUDA 12.1 with cuDNN 8.9.7
-- **Performance**: Professional strength, suitable for dan-level play
-- **Size**: ~2GB compressed
-- **Requirements**: NVIDIA GPU with CUDA 12.1+, nvidia-docker
-- **Memory**: ~1GB RAM + 2-4GB VRAM
-
-```bash
-docker pull ghcr.io/stubbi/katago-server:latest-gpu
-docker run --gpus all -p 2718:2718 ghcr.io/stubbi/katago-server:latest-gpu
-```
-
-#### 3. Minimal - `latest-minimal`
+#### 2. Minimal - `latest-minimal`
 **Best for**: Custom configurations, different models
 - **Model**: None (bring your own)
 - **KataGo**: Not included (mount your own)
@@ -493,6 +480,23 @@ docker run -p 2718:2718 \
   ghcr.io/stubbi/katago-server:latest-minimal
 ```
 
+#### GPU Support
+
+GPU images are **not currently published** to the container registry. The Dockerfile includes a `gpu` target that you can build locally:
+
+```bash
+# Build your own GPU image
+docker build --target gpu -t katago-server:gpu .
+
+# Run with GPU support (requires NVIDIA GPU and nvidia-docker)
+docker run --gpus all -p 2718:2718 katago-server:gpu
+```
+
+The GPU variant includes:
+- CUDA 12.2 with cuDNN 8.9.7
+- 28-block network for strong play
+- Requirements: NVIDIA GPU with CUDA support, nvidia-docker runtime
+
 ### Usage Examples
 
 **Quick Start (CPU)**:
@@ -501,11 +505,11 @@ docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
 # Server available at http://localhost:2718
 ```
 
-**GPU with Custom Config**:
+**CPU with Custom Config**:
 ```bash
-docker run --gpus all -p 2718:2718 \
+docker run -p 2718:2718 \
   -v $(pwd)/gtp_config.cfg:/app/gtp_config.cfg:ro \
-  ghcr.io/stubbi/katago-server:latest-gpu
+  ghcr.io/stubbi/katago-server:latest
 ```
 
 **Custom Model (Minimal)**:
@@ -535,18 +539,22 @@ docker run -p 2718:2718 \
 ```yaml
 version: '3.8'
 services:
-  katago-cpu:
+  katago-server:
     image: ghcr.io/stubbi/katago-server:latest
     ports:
       - "2718:2718"
     environment:
       - RUST_LOG=info
     restart: unless-stopped
+```
 
-  katago-gpu:
-    image: ghcr.io/stubbi/katago-server:latest-gpu
+For GPU support with Docker Compose, build locally and update the `image` field:
+```yaml
+services:
+  katago-server-gpu:
+    image: katago-server:gpu  # Build locally: docker build --target gpu -t katago-server:gpu .
     ports:
-      - "2719:2718"
+      - "2718:2718"
     runtime: nvidia
     environment:
       - RUST_LOG=info
@@ -608,10 +616,9 @@ nnMaxBatchSize = 32
 
 ### Available Tags
 
-- `latest` - CPU version with 15-block model (recommended for getting started)
-- `latest-gpu` - GPU version with 40-block model (production-grade strength)
+- `latest` - CPU version with 28-block model (recommended)
 - `latest-minimal` - No bundled model, bring your own
-- `v*.*.*` - Semantic version tags (all variants available)
+- `v*.*.*` - Semantic version tags (CPU and minimal variants)
 - `main` - Latest main branch build (development)
 
 ### Multi-Architecture Support
@@ -634,8 +641,9 @@ All images support both `linux/amd64` and `linux/arm64` architectures, automatic
 - **Latency**: <1ms (API overhead only)
 
 ### Benchmarks (on moderate hardware)
-- **15-block model (CPU)**: ~2-5 seconds per move
-- **40-block model (GPU)**: ~0.5-1 second per move
+- **15-block model (CPU)**: ~1-3 seconds per move (low-end systems)
+- **28-block model (CPU)**: ~3-8 seconds per move (recommended)
+- **40-block model (GPU)**: ~0.5-1 second per move (local builds)
 
 ## Contributing
 
