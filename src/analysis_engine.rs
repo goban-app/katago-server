@@ -23,7 +23,8 @@ struct AnalysisQuery {
     komi: f32,
     board_x_size: u8,
     board_y_size: u8,
-    analyze_turns: Vec<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    analyze_turns: Option<Vec<u32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_visits: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -290,9 +291,6 @@ impl AnalysisEngine {
             color = if color == "B" { "W" } else { "B" };
         }
 
-        // Analyze the final position (after all moves)
-        let turn_to_analyze = request.moves.len() as u32;
-
         let query = AnalysisQuery {
             id: request_id.clone(),
             initial_stones: vec![], // Empty for standard games (could support handicap via API later)
@@ -309,7 +307,8 @@ impl AnalysisEngine {
             komi: request.komi.unwrap_or(7.5),
             board_x_size: request.board_x_size,
             board_y_size: request.board_y_size,
-            analyze_turns: vec![turn_to_analyze],
+            // Let analyzeTurns default to analyzing the final position
+            analyze_turns: None,
             // Always include maxVisits - KataGo requires this to start analysis
             max_visits: Some(request.max_visits.unwrap_or(200)),
             include_ownership: request.include_ownership,

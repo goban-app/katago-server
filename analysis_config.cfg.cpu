@@ -4,8 +4,8 @@
 # Logging
 logDir = analysis_logs
 logSearchInfo = false
-logAllRequests = false
-logAllResponses = false
+logAllRequests = true
+logAllResponses = true
 
 # Analysis behavior
 reportAnalysisWinratesAs = SIDETOMOVE
