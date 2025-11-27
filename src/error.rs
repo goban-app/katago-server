@@ -12,10 +12,14 @@ pub enum KatagoError {
     Timeout(u64),
 
     #[error("Failed to parse KataGo response: {0}")]
+    #[allow(dead_code)] // May be useful for future error handling
     ParseError(String),
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
 
     #[allow(dead_code)]
     #[error("Invalid GTP command: {0}")]

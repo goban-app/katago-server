@@ -23,6 +23,7 @@ static INFO_SCORELEAD_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"scoreLead\s+([^\s]+)\s+").unwrap());
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Used by legacy select_move, may be useful for future features
 pub struct MoveCandidate {
     pub mv: String,
     pub psv: i32,
@@ -52,6 +53,7 @@ pub struct KatagoBot {
     process: Arc<StdMutex<Option<Child>>>,
     stdin: Arc<StdMutex<Option<ChildStdin>>>,
     response_rx: Arc<TokioMutex<mpsc::UnboundedReceiver<String>>>,
+    #[allow(dead_code)] // Used by legacy select_move, may be useful for future features
     last_move_color: Arc<TokioMutex<String>>,
     diagnostics: Arc<RwLock<Diagnostics>>,
 }
@@ -300,6 +302,7 @@ impl KatagoBot {
         Ok(())
     }
 
+    #[allow(dead_code)] // Legacy method, may be useful for future features
     pub async fn select_move(&self, moves: &[String], config: &RequestConfig) -> Result<String> {
         info!("Selecting move for position with {} moves", moves.len());
 
@@ -438,6 +441,18 @@ impl KatagoBot {
 
     pub fn diagnostics(&self) -> Diagnostics {
         self.diagnostics.read().unwrap().clone()
+    }
+
+    pub fn model_path(&self) -> &str {
+        &self.config.model_path
+    }
+
+    pub async fn clear_cache(&self) -> Result<()> {
+        info!("Clearing KataGo cache");
+        self.send_command("clear_cache")?;
+        // Wait for acknowledgment
+        self.wait_for_response(5).await?;
+        Ok(())
     }
 }
 

@@ -18,7 +18,7 @@ services:
       - RUST_LOG=info
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2718/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2718/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -40,7 +40,7 @@ services:
   #     - NVIDIA_VISIBLE_DEVICES=all
   #   restart: unless-stopped
   #   healthcheck:
-  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2718/health"]
+  #     test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2718/api/v1/health"]
   #     interval: 30s
   #     timeout: 10s
   #     retries: 3

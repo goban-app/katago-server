@@ -237,7 +237,7 @@ jobs:
       - name: Test health endpoint
         run: |
           docker run --rm --network test-net curlimages/curl:latest \
-            curl -f http://test-container:2718/health || {
+            curl -f http://test-container:2718/api/v1/health || {
             echo "ERROR: Health check failed"
             exit 1
           }
@@ -246,9 +246,9 @@ jobs:
       - name: Test API endpoint
         run: |
           RESPONSE=$(docker run --rm --network test-net curlimages/curl:latest \
-            curl -f -X POST http://test-container:2718/score/katago_gtp_bot \
+            curl -f -X POST http://test-container:2718/api/v1/analysis \
             -H "Content-Type: application/json" \
-            -d '{"board_size":19,"moves":["R4","D16"],"config":{"ownership":true}}') || {
+            -d '{"moves":["R4","D16"],"boardXSize":19,"boardYSize":19,"includeOwnership":true}') || {
             echo "ERROR: API endpoint request failed"
             docker logs test-container
             exit 1
@@ -257,25 +257,26 @@ jobs:
           echo "Response: $RESPONSE"
 
           # Validate ownership data (should have 361 values for 19x19 board)
-          PROBS_COUNT=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.probs | length')
-          echo "Ownership values count: $PROBS_COUNT (expected: 361)"
-          if [ "$PROBS_COUNT" != "361" ]; then
-            echo "ERROR: Expected 361 ownership values, got $PROBS_COUNT"
+          OWNERSHIP_COUNT=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.ownership | length')
+          echo "Ownership values count: $OWNERSHIP_COUNT (expected: 361)"
+          if [ "$OWNERSHIP_COUNT" != "361" ]; then
+            echo "ERROR: Expected 361 ownership values, got $OWNERSHIP_COUNT"
             docker logs test-container
             exit 1
           fi
 
-          # Validate diagnostics are not default values
-          WINPROB=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.diagnostics.winprob')
-          if [ "$WINPROB" = "-1.0" ] || [ "$WINPROB" = "-1" ]; then
-            echo "ERROR: Winprob is still default value (-1.0)"
+          # Validate winrate is present and reasonable
+          WINRATE=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.rootInfo.winrate')
+          echo "Winrate: $WINRATE"
+          if [ "$WINRATE" = "null" ] || [ -z "$WINRATE" ]; then
+            echo "ERROR: Winrate is null or missing"
             docker logs test-container
             exit 1
           fi
 
           echo "API test passed ✓"
-          echo "  - Ownership values: $PROBS_COUNT ✓"
-          echo "  - Winprob: $WINPROB ✓"
+          echo "  - Ownership values: $OWNERSHIP_COUNT ✓"
+          echo "  - Winrate: $WINRATE ✓"
 
       - name: Cleanup
         if: always()

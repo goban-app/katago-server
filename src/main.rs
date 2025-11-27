@@ -3,6 +3,9 @@ mod config;
 mod error;
 mod katago_bot;
 
+#[allow(dead_code)] // JSON analysis engine - experimental, not yet working
+mod analysis_engine;
+
 use crate::api::create_router;
 use crate::config::Config;
 use crate::katago_bot::KatagoBot;
@@ -33,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting KataGo server with config: {:?}", config);
 
-    // Initialize KataGo bot
+    // Initialize KataGo bot (GTP mode)
     let bot = Arc::new(KatagoBot::new(config.katago)?);
 
     // Create router with CORS and tracing
@@ -51,10 +54,12 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
     info!("Listening on http://{}", addr);
+    info!("");
     info!("API endpoints:");
-    info!("  POST /select-move/katago_gtp_bot - Get best move");
-    info!("  POST /score/katago_gtp_bot - Get territory ownership");
-    info!("  GET  /health - Health check");
+    info!("  POST /api/v1/analysis      - Comprehensive position analysis");
+    info!("  GET  /api/v1/health        - Health check with details");
+    info!("  GET  /api/v1/version       - Server and KataGo version");
+    info!("  POST /api/v1/cache/clear   - Clear neural network cache");
 
     axum::serve(listener, app).await?;
 

@@ -4,6 +4,8 @@
 # === Search Settings ===
 # More threads for GPU efficiency
 numSearchThreads = 8
+# Analysis engine threads (required for JSON analysis mode)
+numAnalysisThreads = 8
 
 # More visits for stronger play with GPU acceleration
 maxVisits = 800

@@ -79,6 +79,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[allow(dead_code)] // Kept for potential future GTP mode support
 pub struct RequestConfig {
     #[serde(default)]
     pub komi: Option<f32>,
