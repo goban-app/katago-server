@@ -16,6 +16,7 @@ use tracing::{debug, error, info};
 #[serde(rename_all = "camelCase")]
 struct AnalysisQuery {
     id: String,
+    initial_stones: Vec<Vec<String>>,
     moves: Vec<Vec<String>>,
     rules: String,
     komi: f32,
@@ -268,6 +269,7 @@ impl AnalysisEngine {
 
         let query = AnalysisQuery {
             id: request_id.clone(),
+            initial_stones: vec![], // Empty for standard games (could support handicap via API later)
             moves: katago_moves,
             rules: request.rules.clone().unwrap_or_else(|| {
                 // Auto-detect rules from komi
