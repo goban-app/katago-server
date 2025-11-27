@@ -1,5 +1,4 @@
-use crate::config::RequestConfig;
-use crate::katago_bot::KatagoBot;
+use crate::analysis_engine::AnalysisEngine;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -11,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::error;
 
-pub type AppState = Arc<KatagoBot>;
+pub type AppState = Arc<AnalysisEngine>;
 
 // ============================================================================
 // New V1 API Types
@@ -20,6 +19,7 @@ pub type AppState = Arc<KatagoBot>;
 /// Comprehensive analysis request supporting all KataGo features
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Some fields reserved for future enhancements
 pub struct AnalysisRequest {
     /// Moves played so far in coordinate notation (e.g., ["D4", "Q16"])
     pub moves: Vec<String>,
@@ -123,6 +123,7 @@ fn default_board_size() -> u8 {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // Reserved for future move filtering support
 pub struct MoveFilter {
     pub player: String,
     pub moves: Vec<String>,
@@ -264,6 +265,7 @@ impl ApiError {
         self
     }
 
+    #[allow(dead_code)] // May be useful for future error context
     pub fn with_instance(mut self, instance: String) -> Self {
         self.problem.instance = Some(instance);
         self
@@ -321,6 +323,11 @@ impl From<crate::error::KatagoError> for ApiError {
                 "Internal Error",
                 &format!("IO error: {}", err),
             ),
+            KatagoError::JsonError(err) => ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "JSON Error",
+                &format!("JSON parsing error: {}", err),
+            ),
         }
     }
 }
@@ -335,13 +342,13 @@ impl From<anyhow::Error> for ApiError {
     }
 }
 
-pub fn create_router(bot: Arc<KatagoBot>) -> Router {
+pub fn create_router(engine: Arc<AnalysisEngine>) -> Router {
     Router::new()
         .route("/api/v1/analysis", post(v1_analysis))
         .route("/api/v1/health", get(v1_health))
         .route("/api/v1/version", get(v1_version))
         .route("/api/v1/cache/clear", post(v1_cache_clear))
-        .with_state(bot)
+        .with_state(engine)
 }
 
 // ============================================================================
@@ -350,7 +357,7 @@ pub fn create_router(bot: Arc<KatagoBot>) -> Router {
 
 #[axum::debug_handler]
 async fn v1_analysis(
-    State(bot): State<AppState>,
+    State(engine): State<AppState>,
     Json(request): Json<AnalysisRequest>,
 ) -> std::result::Result<Json<AnalysisResponse>, ApiError> {
     let request_id = request
@@ -358,101 +365,13 @@ async fn v1_analysis(
         .clone()
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-    // For now, we'll use the existing GTP-based implementation
-    // TODO: Implement full JSON analysis engine support in future PR
-
-    // Convert to legacy format and call select_move
-    let _bot_move = bot
-        .select_move(
-            &request.moves,
-            &RequestConfig {
-                komi: request.komi,
-                client: None,
-                request_id: Some(request_id.clone()),
-                ownership: request.include_ownership,
-            },
-        )
+    // Use the JSON analysis engine for full feature support
+    let response = engine
+        .analyze(&request)
         .await
         .map_err(|e| ApiError::from(e).with_request_id(request_id.clone()))?;
 
-    let diagnostics = bot.diagnostics();
-
-    // Convert diagnostics to V1 format
-    let move_infos = if !diagnostics.best_ten.is_empty() {
-        Some(
-            diagnostics
-                .best_ten
-                .iter()
-                .enumerate()
-                .map(|(idx, candidate)| {
-                    MoveInfo {
-                        move_coord: candidate.mv.clone(),
-                        visits: candidate.psv as u32, // PSV as visits approximation
-                        winrate: diagnostics.winprob,
-                        score_mean: diagnostics.score,
-                        score_stdev: 0.0, // Not available from GTP
-                        score_lead: diagnostics.score,
-                        utility: 0.0, // Not available from GTP
-                        utility_lcb: None,
-                        lcb: 0.0,                             // Not available from GTP
-                        prior: candidate.psv as f32 / 1000.0, // Approximate prior from PSV
-                        order: idx as u32,
-                        pv: None, // Not available from GTP
-                        pv_visits: None,
-                        ownership: None,
-                    }
-                })
-                .collect(),
-        )
-    } else {
-        None
-    };
-
-    let root_info = RootInfo {
-        winrate: diagnostics.winprob,
-        score_lead: diagnostics.score,
-        utility: 0.0,
-        visits: 0,
-        current_player: "B".to_string(), // Would need to track this properly
-        raw_winrate: None,
-        raw_score_mean: None,
-        raw_st_score_error: None,
-    };
-
-    // Get ownership if requested
-    let ownership = if request.include_ownership.unwrap_or(false) {
-        let probs = bot
-            .score(
-                &request.moves,
-                &RequestConfig {
-                    komi: request.komi,
-                    client: None,
-                    request_id: Some(request_id.clone()),
-                    ownership: Some(true),
-                },
-            )
-            .await
-            .map_err(|e| ApiError::from(e).with_request_id(request_id.clone()))?;
-
-        if probs.is_empty() {
-            None
-        } else {
-            Some(probs)
-        }
-    } else {
-        None
-    };
-
-    Ok(Json(AnalysisResponse {
-        id: request_id,
-        turn_number: request.moves.len() as u32,
-        is_during_search: false,
-        move_infos,
-        root_info: Some(root_info),
-        ownership,
-        ownership_stdev: None,
-        policy: None,
-    }))
+    Ok(Json(response))
 }
 
 #[axum::debug_handler]
@@ -479,11 +398,11 @@ async fn v1_version(State(_bot): State<AppState>) -> impl IntoResponse {
 
 #[axum::debug_handler]
 async fn v1_cache_clear(
-    State(bot): State<AppState>,
+    State(engine): State<AppState>,
 ) -> std::result::Result<Json<CacheClearResponse>, ApiError> {
     use chrono::Utc;
 
-    bot.clear_cache().await?;
+    engine.clear_cache().await?;
 
     Ok(Json(CacheClearResponse {
         status: "cleared".to_string(),

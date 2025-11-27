@@ -17,6 +17,9 @@ pub enum KatagoError {
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
+    #[error("JSON error: {0}")]
+    JsonError(#[from] serde_json::Error),
+
     #[allow(dead_code)]
     #[error("Invalid GTP command: {0}")]
     InvalidCommand(String),
