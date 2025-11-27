@@ -12,6 +12,7 @@ pub enum KatagoError {
     Timeout(u64),
 
     #[error("Failed to parse KataGo response: {0}")]
+    #[allow(dead_code)] // May be useful for future error handling
     ParseError(String),
 
     #[error("IO error: {0}")]
