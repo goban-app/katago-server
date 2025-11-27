@@ -9,7 +9,7 @@ logAllResponses = false
 
 # Analysis behavior
 reportAnalysisWinratesAs = SIDETOMOVE
-maxVisits = 50
+maxVisits = 10
 
 # Threading configuration for CPU
 # numAnalysisThreads: number of positions to analyze in parallel
