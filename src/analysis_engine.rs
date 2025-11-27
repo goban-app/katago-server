@@ -325,6 +325,56 @@ impl AnalysisEngine {
         stdin.flush()?;
         Ok(())
     }
+
+    pub async fn query_version(&self) -> Result<(String, Option<String>)> {
+        let query_id = uuid::Uuid::new_v4().to_string();
+        let query = serde_json::json!({
+            "id": query_id,
+            "action": "query_version"
+        });
+
+        let json = serde_json::to_string(&query)?;
+
+        // Send query (ensure mutex is dropped before await)
+        {
+            let mut stdin = self.stdin.lock().unwrap();
+            let stdin = stdin.as_mut().ok_or(KatagoError::ProcessDied)?;
+            writeln!(stdin, "{}", json)?;
+            stdin.flush()?;
+        } // Mutex guard dropped here
+
+        // Wait for version response
+        let duration = Duration::from_secs(5);
+        timeout(duration, async {
+            loop {
+                let mut rx = self.response_rx.lock().await;
+                if let Some(response) = rx.recv().await {
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
+                        if value.get("id").and_then(|id| id.as_str()) == Some(&query_id) {
+                            let version = value
+                                .get("version")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown")
+                                .to_string();
+                            let git_hash = value
+                                .get("git_hash")
+                                .and_then(|h| h.as_str())
+                                .map(|s| s.to_string());
+                            return Ok((version, git_hash));
+                        }
+                    }
+                } else {
+                    return Err(KatagoError::ProcessDied);
+                }
+            }
+        })
+        .await
+        .map_err(|_| KatagoError::Timeout(5))?
+    }
+
+    pub fn model_path(&self) -> &str {
+        &self.config.model_path
+    }
 }
 
 impl Drop for AnalysisEngine {

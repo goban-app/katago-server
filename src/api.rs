@@ -192,6 +192,7 @@ pub struct VersionResponse {
     pub server: ServerVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub katago: Option<KatagoVersion>,
+    pub model: ModelInfo,
 }
 
 #[derive(Debug, Serialize)]
@@ -206,6 +207,12 @@ pub struct KatagoVersion {
     pub version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub git_hash: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInfo {
+    pub name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -386,14 +393,33 @@ async fn v1_health(State(_bot): State<AppState>) -> impl IntoResponse {
 }
 
 #[axum::debug_handler]
-async fn v1_version(State(_bot): State<AppState>) -> impl IntoResponse {
-    Json(VersionResponse {
+async fn v1_version(
+    State(engine): State<AppState>,
+) -> std::result::Result<Json<VersionResponse>, ApiError> {
+    // Query KataGo version
+    let katago_version = match engine.query_version().await {
+        Ok((version, git_hash)) => Some(KatagoVersion { version, git_hash }),
+        Err(e) => {
+            tracing::warn!("Failed to query KataGo version: {}", e);
+            None
+        }
+    };
+
+    // Get model name (filename only, not full path for security)
+    let model_name = std::path::Path::new(engine.model_path())
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    Ok(Json(VersionResponse {
         server: ServerVersion {
             name: "katago-server".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
-        katago: None, // Would need to query KataGo for its version
-    })
+        katago: katago_version,
+        model: ModelInfo { name: model_name },
+    }))
 }
 
 #[axum::debug_handler]
@@ -498,12 +524,16 @@ mod tests {
                 version: "1.15.3".to_string(),
                 git_hash: Some("abc123".to_string()),
             }),
+            model: ModelInfo {
+                name: "kata1-b18c384nbt-s12345.bin.gz".to_string(),
+            },
         };
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"name\":\"katago-server\""));
         assert!(json.contains("\"version\":\"1.0.0\""));
         assert!(json.contains("\"gitHash\":\"abc123\""));
+        assert!(json.contains("\"kata1-b18c384nbt-s12345.bin.gz\""));
     }
 
     #[test]
