@@ -7,7 +7,7 @@ services:
     # Or build locally:
     # build:
     #   context: .
-    #   dockerfile: Dockerfile
+    #   target: cpu
     ports:
       - "2718:2718"
     # Uncomment to mount custom config:
@@ -27,11 +27,11 @@ services:
   # GPU version - requires nvidia-docker
   # Uncomment to use GPU-accelerated version
   # katago-server-gpu:
-  #   image: ghcr.io/stubbi/katago-server:latest-gpu
+  #   image: ghcr.io/stubbi/katago-server:gpu
   #   # Or build locally:
   #   # build:
   #   #   context: .
-  #   #   dockerfile: Dockerfile.gpu
+  #   #   target: gpu
   #   ports:
   #     - "2719:2718"
   #   runtime: nvidia

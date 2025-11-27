@@ -13,6 +13,9 @@ concurrency:
 
 permissions:
   contents: read
+  packages: write
+  attestations: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,6 +24,9 @@ env:
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
+  # ===========================================================================
+  # Rust code quality checks
+  # ===========================================================================
   check:
     name: Check
     runs-on: ubuntu-latest
@@ -66,325 +72,41 @@ jobs:
           shared-key: "rust-cache"
       - run: cargo clippy --all-features -- -D warnings
 
-  docker-base:
-    name: Build Base Docker Image
+  # ===========================================================================
+  # Docker builds - verify all variants can be built
+  # ===========================================================================
+  docker-verify:
+    name: Verify Docker Build (${{ matrix.variant }})
     needs: [check, test, fmt, clippy]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      #attestations: write
-      id-token: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create build info file to bust Docker cache
-        run: echo "build_sha=${{ github.sha }}" > .build-sha
-
-      - name: Check if base image needs rebuild
-        id: skip_base
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const pr = context.payload.pull_request;
-            const baseRef = pr ? pr.base.sha : context.payload.before;
-            const headRef = pr ? pr.head.sha : context.sha;
-            const changed = await github.rest.repos.compareCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              base: baseRef,
-              head: headRef
-            });
-            const files = changed.data.files.map(f => f.filename);
-            const needsBuild = files.some(f =>
-              f === 'Dockerfile.base' ||
-              f === 'Cargo.toml' ||
-              f === 'Cargo.lock' ||
-              f.startsWith('src/')
-            );
-            core.setOutput('needs_build', needsBuild);
-            if (!needsBuild) {
-              core.info('No relevant changes, skipping base image build.');
-              core.setOutput('skip', 'true');
-            }
-
-      - name: Exit if no base build needed
-        if: steps.skip_base.outputs.skip == 'true'
-        run: |
-          echo "No relevant changes for base image, skipping build."
-          exit 0
-
-      - name: Set image name to lowercase
-        id: image
-        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push base image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile.base
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.image.outputs.name }}:base
-          cache-from: |
-            type=gha,scope=base-${{ github.ref_name }}
-            type=gha,scope=base-main
-            type=gha,scope=base
-          cache-to: type=gha,mode=max,scope=base-${{ github.ref_name }}
-          platforms: linux/amd64,linux/arm64
-          provenance: false
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-
-  docker-build:
-    name: Build Docker Variant (${{ matrix.variant }})
-    needs: docker-base
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     strategy:
+      fail-fast: false
       matrix:
         include:
+          - variant: base
+            platforms: linux/amd64,linux/arm64
           - variant: cpu
-            dockerfile: Dockerfile
-            suffix: ""
-            description: "CPU-only with 18-block model"
-
+            platforms: linux/amd64,linux/arm64
           - variant: minimal
-            dockerfile: Dockerfile.minimal
-            suffix: "-minimal"
-            description: "Minimal - bring your own model"
+            platforms: linux/amd64,linux/arm64
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create build info file to bust Docker cache
-        run: echo "build_sha=${{ github.sha }}" > .build-sha
-
       - name: Set image name to lowercase
         id: image
         run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build Docker image for testing (amd64 only)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: false
-          load: true
-          tags: katago-server:test-${{ matrix.variant }}
-          platforms: linux/amd64
-          cache-from: |
-            type=gha,scope=${{ matrix.variant }}-${{ github.ref_name }}
-            type=gha,scope=${{ matrix.variant }}-main
-            type=gha,scope=${{ matrix.variant }}
-            type=registry,ref=${{ steps.image.outputs.name }}:base
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ github.ref_name }}
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-            BUILDKIT_INLINE_CACHE=1
-
-  docker-test:
-    name: Smoke Test (${{ matrix.variant }})
-    needs: docker-build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - variant: cpu
-            dockerfile: Dockerfile
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create build info file to bust Docker cache
-        run: echo "build_sha=${{ github.sha }}" > .build-sha
-
-      - name: Set image name to lowercase
-        id: image
-        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image from cache
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          push: false
-          load: true
-          tags: katago-server:test-${{ matrix.variant }}
-          platforms: linux/amd64
-          cache-from: |
-            type=gha,scope=${{ matrix.variant }}-${{ github.ref_name }}
-            type=gha,scope=${{ matrix.variant }}-main
-            type=gha,scope=${{ matrix.variant }}
-            type=registry,ref=${{ steps.image.outputs.name }}:base
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-
-      - name: Create test network
-        run: docker network create test-net-${{ matrix.variant }}
-
-      - name: Start container
-        run: |
-          docker run -d \
-            --name test-container-${{ matrix.variant }} \
-            --network test-net-${{ matrix.variant }} \
-            katago-server:test-${{ matrix.variant }}
-
-      - name: Wait for startup
-        run: sleep 15
-
-      - name: Check container logs
-        run: |
-          echo "=== Container Logs ==="
-          docker logs test-container-${{ matrix.variant }} 2>&1 | tee container.log
-          echo "======================"
-
-          # Check for successful startup
-          if ! grep -q "Listening on" container.log; then
-            echo "ERROR: Server did not start successfully"
-            exit 1
-          fi
-
-          # Check if KataGo died immediately
-          if grep -q "KataGo stdout closed" container.log && \
-             [ $(grep -c "KataGo stdout closed" container.log) -lt 3 ]; then
-            # If stdout closed very early, it's likely a crash
-            STARTUP_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
-              grep "Starting KataGo process" | head -1 | cut -d' ' -f1)
-            CLOSED_TIME=$(docker logs test-container-${{ matrix.variant }} 2>&1 | \
-              grep "KataGo stdout closed" | head -1 | cut -d' ' -f1)
-
-            echo "WARNING: KataGo process may have crashed on startup"
-            echo "Check stderr logs for errors"
-          fi
-
-          # Ensure no stderr errors about missing files
-          if grep -qi "no such file" container.log; then
-            echo "ERROR: Missing files detected in logs"
-            exit 1
-          fi
-
-      - name: Test health endpoint
-        run: |
-          docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
-            curl -f http://test-container-${{ matrix.variant }}:2718/health || {
-            echo "ERROR: Health check failed"
-            exit 1
-          }
-          echo "Health check passed ✓"
-
-      - name: Test API endpoint
-        run: |
-          # Test score endpoint and validate response
-          RESPONSE=$(docker run --rm --network test-net-${{ matrix.variant }} curlimages/curl:latest \
-            curl -f -X POST http://test-container-${{ matrix.variant }}:2718/score/katago_gtp_bot \
-            -H "Content-Type: application/json" \
-            -d '{"board_size":19,"moves":["R4","D16"],"config":{"ownership":true}}') || {
-            echo "ERROR: API endpoint request failed"
-            docker logs test-container-${{ matrix.variant }}
-            exit 1
-          }
-
-          echo "Response: $RESPONSE"
-
-          # Validate ownership data (should have 361 values for 19x19 board)
-          PROBS_COUNT=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.probs | length')
-          echo "Ownership values count: $PROBS_COUNT (expected: 361)"
-          if [ "$PROBS_COUNT" != "361" ]; then
-            echo "ERROR: Expected 361 ownership values, got $PROBS_COUNT"
-            echo "This indicates the kata-analyze fix is not working properly"
-            docker logs test-container-${{ matrix.variant }}
-            exit 1
-          fi
-
-          # Validate diagnostics are not default values
-          WINPROB=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.diagnostics.winprob')
-          if [ "$WINPROB" = "-1.0" ] || [ "$WINPROB" = "-1" ]; then
-            echo "ERROR: Winprob is still default value (-1.0)"
-            echo "This indicates diagnostics were not updated"
-            docker logs test-container-${{ matrix.variant }}
-            exit 1
-          fi
-
-          echo "API test passed ✓"
-          echo "  - Ownership values: $PROBS_COUNT ✓"
-          echo "  - Winprob: $WINPROB ✓"
-
-      - name: Cleanup
-        if: always()
-        run: |
-          docker rm -f test-container-${{ matrix.variant }} || true
-          docker network rm test-net-${{ matrix.variant }} || true
-
-  docker-publish:
-    name: Publish Docker Image (${{ matrix.variant }})
-    needs: [docker-build, docker-test]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
-
-    strategy:
-      matrix:
-        include:
-          - variant: cpu
-            dockerfile: Dockerfile
-            suffix: ""
-            description: "CPU-only with 18-block model"
-
-          - variant: minimal
-            dockerfile: Dockerfile.minimal
-            suffix: "-minimal"
-            description: "Minimal - bring your own model"
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Create build info file to bust Docker cache
-        run: echo "build_sha=${{ github.sha }}" > .build-sha
-
-      - name: Set image name to lowercase
-        id: image
-        run: echo "name=$(echo 'ghcr.io/${{ github.repository_owner }}/katago-server' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -397,7 +119,7 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           flavor: |
-            suffix=${{ matrix.suffix }},onlatest=true
+            suffix=${{ matrix.variant == 'base' && '' || format('-{0}', matrix.variant) }},onlatest=true
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -406,32 +128,140 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ matrix.variant }},enable=${{ matrix.variant == 'base' }}
           labels: |
             org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
-            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.description=KataGo Server - ${{ matrix.variant }} variant
 
-      - name: Build and push multi-platform Docker image
+      - name: Build and push Docker image
         id: push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile }}
-          push: true
+          target: ${{ matrix.variant }}
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ matrix.platforms }}
           cache-from: |
+            type=gha,scope=${{ matrix.variant }}-${{ github.ref_name }}
             type=gha,scope=${{ matrix.variant }}-main
-            type=gha,scope=${{ matrix.variant }}
-            type=registry,ref=${{ steps.image.outputs.name }}:base
-          platforms: linux/amd64,linux/arm64
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ github.ref_name }}
           provenance: false
           build-args: |
             GIT_SHA=${{ github.sha }}
-            BUILDKIT_INLINE_CACHE=1
 
       - name: Generate artifact attestation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ steps.image.outputs.name }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+  # ===========================================================================
+  # Smoke test - verify CPU variant works
+  # ===========================================================================
+  docker-test:
+    name: Smoke Test (CPU)
+    needs: docker-verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CPU image for testing
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: cpu
+          load: true
+          tags: katago-server:test-cpu
+          platforms: linux/amd64
+          cache-from: |
+            type=gha,scope=cpu-${{ github.ref_name }}
+            type=gha,scope=cpu-main
+
+      - name: Create test network
+        run: docker network create test-net
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name test-container \
+            --network test-net \
+            katago-server:test-cpu
+
+      - name: Wait for startup
+        run: sleep 15
+
+      - name: Check container logs
+        run: |
+          echo "=== Container Logs ==="
+          docker logs test-container 2>&1 | tee container.log
+          echo "======================"
+
+          # Check for successful startup
+          if ! grep -q "Listening on" container.log; then
+            echo "ERROR: Server did not start successfully"
+            exit 1
+          fi
+
+          # Ensure no stderr errors about missing files
+          if grep -qi "no such file" container.log; then
+            echo "ERROR: Missing files detected in logs"
+            exit 1
+          fi
+
+      - name: Test health endpoint
+        run: |
+          docker run --rm --network test-net curlimages/curl:latest \
+            curl -f http://test-container:2718/health || {
+            echo "ERROR: Health check failed"
+            exit 1
+          }
+          echo "Health check passed ✓"
+
+      - name: Test API endpoint
+        run: |
+          RESPONSE=$(docker run --rm --network test-net curlimages/curl:latest \
+            curl -f -X POST http://test-container:2718/score/katago_gtp_bot \
+            -H "Content-Type: application/json" \
+            -d '{"board_size":19,"moves":["R4","D16"],"config":{"ownership":true}}') || {
+            echo "ERROR: API endpoint request failed"
+            docker logs test-container
+            exit 1
+          }
+
+          echo "Response: $RESPONSE"
+
+          # Validate ownership data (should have 361 values for 19x19 board)
+          PROBS_COUNT=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.probs | length')
+          echo "Ownership values count: $PROBS_COUNT (expected: 361)"
+          if [ "$PROBS_COUNT" != "361" ]; then
+            echo "ERROR: Expected 361 ownership values, got $PROBS_COUNT"
+            docker logs test-container
+            exit 1
+          fi
+
+          # Validate diagnostics are not default values
+          WINPROB=$(echo "$RESPONSE" | docker run --rm -i ghcr.io/jqlang/jq:latest '.diagnostics.winprob')
+          if [ "$WINPROB" = "-1.0" ] || [ "$WINPROB" = "-1" ]; then
+            echo "ERROR: Winprob is still default value (-1.0)"
+            docker logs test-container
+            exit 1
+          fi
+
+          echo "API test passed ✓"
+          echo "  - Ownership values: $PROBS_COUNT ✓"
+          echo "  - Winprob: $WINPROB ✓"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f test-container || true
+          docker network rm test-net || true
