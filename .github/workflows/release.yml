@@ -97,11 +97,39 @@ jobs:
           push-to-registry: true
 
   # ===========================================================================
+  # Release Helm Chart
+  # ===========================================================================
+  helm-release:
+    name: Release Helm Chart
+    needs: docker-release  # Wait for Docker images to be available
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+  # ===========================================================================
   # Create GitHub Release
   # ===========================================================================
   github-release:
     name: Create GitHub Release
-    needs: docker-release
+    needs: [docker-release, helm-release]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -110,6 +138,12 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract chart version
+        id: chart
+        run: |
+          CHART_VERSION=$(grep '^version:' charts/katago-server/Chart.yaml | awk '{print $2}')
+          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -127,10 +161,17 @@ jobs:
 
             ## Helm Chart
 
-            The Helm chart for this version will be released separately via the [chart repository](https://stubbi.github.io/katago-server).
+            Install the Helm chart for this release:
 
             ```bash
             helm repo add katago-server https://stubbi.github.io/katago-server
             helm repo update
-            helm install my-katago katago-server/katago-server --version ${{ steps.version.outputs.version }}
+            helm install my-katago katago-server/katago-server --version ${{ steps.chart.outputs.version }}
+            ```
+
+            Or use the Docker images directly:
+
+            ```bash
+            docker pull ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}
+            docker run -p 2718:2718 ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}
             ```
