@@ -1,0 +1,266 @@
+# Default values for katago-server.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/stubbi/katago-server
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+  # Image variant: "" (default/cpu), "-minimal", "-base"
+  variant: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 2718
+  targetPort: 2718
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: katago-server.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: katago-server-tls
+  #    hosts:
+  #      - katago-server.local
+
+resources: {}
+  # We recommend setting resource requests and limits for production deployments
+  # CPU variant typically needs:
+  # limits:
+  #   cpu: 4000m
+  #   memory: 2Gi
+  # requests:
+  #   cpu: 2000m
+  #   memory: 1Gi
+  # GPU variant typically needs:
+  # limits:
+  #   nvidia.com/gpu: 1
+  #   memory: 4Gi
+  # requests:
+  #   cpu: 2000m
+  #   memory: 2Gi
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 12
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Additional volumes on the output Deployment definition.
+volumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  # minAvailable: 1
+  # maxUnavailable: 1
+
+# KataGo Server specific configuration
+config:
+  # Logging level (trace, debug, info, warn, error)
+  logLevel: info
+
+  # KataGo configuration (only applies to minimal variant)
+  # For minimal variant, you can mount your own KataGo binary and model
+  katago:
+    # Path to KataGo binary (if using minimal variant with volume mounts)
+    path: /models/katago
+    # Path to model file (if using minimal variant with volume mounts)
+    modelPath: /models/model.bin.gz
+    # Path to GTP config file (if using minimal variant with volume mounts)
+    configPath: /models/gtp_config.cfg
+    # Move timeout in seconds
+    moveTimeoutSecs: 20
+
+  # Custom model download via init container
+  # If enabled, downloads a custom model before the main container starts
+  customModel:
+    enabled: false
+    # URL to download the model from
+    # Example: https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file
+    url: ""
+    # Filename to save the model as (will be placed in /app/custom-model.bin.gz)
+    filename: "custom-model.bin.gz"
+    # Optional: SHA256 checksum for validation
+    sha256sum: ""
+    # Init container image for downloading (must have wget)
+    initImage: "busybox:1.36"
+    # Resource limits for init container
+    initResources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+  # Custom config.toml (optional)
+  # If provided, this will be mounted as a ConfigMap
+  customConfig: ""
+  #  customConfig: |
+  #    [server]
+  #    host = "0.0.0.0"
+  #    port = 2718
+  #
+  #    [katago]
+  #    katago_path = "./katago"
+  #    model_path = "./model.bin.gz"
+  #    config_path = "./gtp_config.cfg"
+  #    move_timeout_secs = 20
+
+# For GPU support
+gpu:
+  enabled: false
+  # Number of GPUs to request
+  count: 1
+  # GPU vendor (nvidia, amd)
+  vendor: nvidia
+  # Specific GPU product or model (optional)
+  # product: "Tesla-V100"
+
+# Environment variables
+env: []
+# - name: RUST_LOG
+#   value: "debug"
+# - name: KATAGO_SERVER__HOST
+#   value: "0.0.0.0"
+
+# Environment variables from ConfigMaps or Secrets
+envFrom: []
+# - configMapRef:
+#     name: katago-config
+# - secretRef:
+#     name: katago-secrets
+
+# Priority class for pod scheduling
+priorityClassName: ""
+
+# Topology spread constraints
+topologySpreadConstraints: []
+# - maxSkew: 1
+#   topologyKey: topology.kubernetes.io/zone
+#   whenUnsatisfiable: DoNotSchedule
+#   labelSelector:
+#     matchLabels:
+#       app.kubernetes.io/name: katago-server
+
+# Pod lifecycle hooks
+lifecycle: {}
+# preStop:
+#   exec:
+#     command: ["/bin/sh", "-c", "sleep 15"]
+
+# DNS configuration
+dnsPolicy: ClusterFirst
+dnsConfig: {}
+# options:
+#   - name: ndots
+#     value: "2"
+
+# Host aliases
+hostAliases: []
+# - ip: "127.0.0.1"
+#   hostnames:
+#   - "foo.local"
+
+# Service Monitor for Prometheus (if using Prometheus Operator)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+  # Additional labels to add to the ServiceMonitor
+  additionalLabels: {}
+  # Prometheus instance selector
+  # matchLabels:
+  #   prometheus: kube-prometheus
