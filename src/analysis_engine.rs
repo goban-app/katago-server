@@ -2,6 +2,7 @@ use crate::api::{AnalysisRequest, AnalysisResponse, MoveInfo, RootInfo};
 use crate::config::KatagoConfig;
 use crate::error::{KatagoError, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, Mutex as StdMutex};
@@ -10,7 +11,6 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
-use std::collections::HashMap;
 
 /// JSON request format for KataGo analysis engine
 #[derive(Debug, Serialize)]
@@ -39,6 +39,7 @@ struct AnalysisQuery {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AnalysisResult {
+    #[allow(dead_code)] // Used for routing responses, not directly accessed
     id: String,
     #[serde(default)]
     turn_number: u32,
@@ -185,13 +186,13 @@ impl AnalysisEngine {
                     Ok(_) => {
                         let trimmed = line.trim();
                         debug!("KataGo analysis raw output: {}", trimmed);
-                        
+
                         // Parse ID from response to route it
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
                             if let Some(id) = value.get("id").and_then(|id| id.as_str()) {
                                 let mut requests = pending_requests.lock().unwrap();
                                 if let Some(sender) = requests.remove(id) {
-                                    if let Err(_) = sender.send(trimmed.to_string()) {
+                                    if sender.send(trimmed.to_string()).is_err() {
                                         warn!("Failed to send response to waiter for ID: {}", id);
                                     }
                                 } else {
@@ -237,7 +238,7 @@ impl AnalysisEngine {
 
     async fn wait_for_response(&self, id: &str, timeout_secs: u64) -> Result<AnalysisResult> {
         let (tx, rx) = oneshot::channel();
-        
+
         {
             let mut requests = self.pending_requests.lock().unwrap();
             requests.insert(id.to_string(), tx);
@@ -412,7 +413,7 @@ impl AnalysisEngine {
 
         // Wait for version response
         let duration = Duration::from_secs(5);
-        
+
         match timeout(duration, rx).await {
             Ok(Ok(response)) => {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
@@ -429,7 +430,9 @@ impl AnalysisEngine {
                         return Ok((version, git_hash));
                     }
                 }
-                Err(KatagoError::ParseError("Failed to parse version response".to_string()))
+                Err(KatagoError::ParseError(
+                    "Failed to parse version response".to_string(),
+                ))
             }
             Ok(Err(_)) => Err(KatagoError::ProcessDied),
             Err(_) => {
