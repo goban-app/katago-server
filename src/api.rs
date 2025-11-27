@@ -394,8 +394,12 @@ async fn v1_analysis(
         winrate: diag.winprob,
         score_lead: diag.score,
         utility: 0.0, // Not available from GTP
-        visits: 0, // Not available from GTP
-        current_player: if request.moves.len() % 2 == 0 { "B".to_string() } else { "W".to_string() },
+        visits: 0,    // Not available from GTP
+        current_player: if request.moves.len() % 2 == 0 {
+            "B".to_string()
+        } else {
+            "W".to_string()
+        },
         raw_winrate: None,
         raw_score_mean: None,
         raw_st_score_error: None,
@@ -407,7 +411,11 @@ async fn v1_analysis(
         is_during_search: false,
         move_infos: Some(vec![]), // GTP doesn't provide per-move analysis
         root_info,
-        ownership: if ownership.is_empty() { None } else { Some(ownership) },
+        ownership: if ownership.is_empty() {
+            None
+        } else {
+            Some(ownership)
+        },
         ownership_stdev: None,
         policy: None,
     };

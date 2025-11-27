@@ -6,9 +6,9 @@ mod katago_bot;
 #[allow(dead_code)] // JSON analysis engine - experimental, not yet working
 mod analysis_engine;
 
-use crate::katago_bot::KatagoBot;
 use crate::api::create_router;
 use crate::config::Config;
+use crate::katago_bot::KatagoBot;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
