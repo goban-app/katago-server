@@ -560,15 +560,18 @@ You can build your own image with a different model:
 
 ```bash
 # Build with specific model
-docker build -t my-katago-server \
-  --build-arg MODEL_NAME=kata1-b10c128-s*.bin.gz \
+docker build --target cpu -t my-katago-server \
+  --build-arg KATAGO_MODEL=kata1-b10c128-s*.bin.gz \
   .
 
 # Build GPU version
-docker build -f Dockerfile.gpu -t my-katago-server:gpu .
+docker build --target gpu -t my-katago-server:gpu .
 
-# Build minimal version
-docker build -f Dockerfile.minimal -t my-katago-server:minimal .
+# Build minimal version (no model included)
+docker build --target minimal -t my-katago-server:minimal .
+
+# Build base version (server binary only)
+docker build --target base -t my-katago-server:base .
 ```
 
 ### Mounting Custom Models
