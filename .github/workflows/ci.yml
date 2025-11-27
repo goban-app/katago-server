@@ -3,8 +3,26 @@ name: CI
 on:
   push:
     branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Dockerfile'
+      - 'docker-setup.sh'
+      - 'gtp_config.cfg.*'
+      - 'config.toml.example'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Dockerfile'
+      - 'docker-setup.sh'
+      - 'gtp_config.cfg.*'
+      - 'config.toml.example'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 concurrency:
