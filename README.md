@@ -200,17 +200,43 @@ Analyze a Go position with comprehensive information including move candidates, 
 ```
 
 **Request Parameters:**
-- `moves` (required): Array of moves in coordinate notation (e.g., ["D4", "Q16"])
-- `komi` (optional, default: 7.5): Komi value
-- `rules` (optional): Game rules ("chinese", "japanese", "korean", "tromp-taylor", etc.)
-- `boardXSize` (optional, default: 19): Board width
-- `boardYSize` (optional, default: 19): Board height
-- `includeOwnership` (optional): Include territory ownership predictions
-- `includePolicy` (optional): Include raw neural network policy
-- `includePVVisits` (optional): Include visit counts in principal variations
-- `maxVisits` (optional): Override search visit limit
-- `analysisPVLen` (optional): Length of principal variation to return
-- `requestId` (optional): Request identifier echoed back in response
+
+*Required:*
+- `moves` (array): Moves played so far in coordinate notation (e.g., ["D4", "Q16"])
+
+*Basic Configuration:*
+- `komi` (float, optional): Komi value for the game
+- `rules` (string, optional): Game rules ("chinese", "japanese", "korean", "tromp-taylor", "aga", etc.)
+- `boardXSize` (integer, optional, default: 19): Board width
+- `boardYSize` (integer, optional, default: 19): Board height
+
+*Initial Position:*
+- `initialStones` (array, optional): Initial stones for handicap games as array of [color, coordinate] pairs
+- `initialPlayer` (string, optional): Player to move at turn 0 ("B" or "W")
+- `analyzeTurns` (array, optional): Which turns to analyze (defaults to final position)
+
+*Analysis Control:*
+- `maxVisits` (integer, optional): Override config file visit limit
+- `rootPolicyTemperature` (float, optional): Temperature for root policy (>1 = more exploration)
+- `rootFpuReductionMax` (float, optional): FPU reduction for exploration
+- `analysisPVLen` (integer, optional): Length of principal variation to return
+
+*Data Request Flags:*
+- `includeOwnership` (boolean, optional): Include territory ownership predictions
+- `includeOwnershipStdev` (boolean, optional): Include ownership standard deviation
+- `includeMovesOwnership` (boolean, optional): Include ownership for each move candidate
+- `includePolicy` (boolean, optional): Include raw neural network policy
+- `includePVVisits` (boolean, optional): Include visit counts in principal variations
+
+*Move Filtering:*
+- `avoidMoves` (array, optional): Moves to avoid considering
+- `allowMoves` (array, optional): Only consider these moves
+
+*Advanced Settings:*
+- `overrideSettings` (object, optional): Override search parameters
+- `reportDuringSearchEvery` (float, optional): Report partial results during search (seconds)
+- `priority` (integer, optional): Query priority
+- `requestId` (string, optional): Request identifier echoed back in response
 
 **Response:**
 ```json
@@ -232,7 +258,8 @@ Analyze a Go position with comprehensive information including move candidates, 
       "prior": 0.18,
       "order": 0,
       "pv": ["D16", "Q4", "D10"],
-      "pvVisits": [142, 95, 82]
+      "pvVisits": [142, 95, 82],
+      "ownership": [0.85, 0.92, -0.15, ...]
     }
   ],
   "rootInfo": {
@@ -242,11 +269,46 @@ Analyze a Go position with comprehensive information including move candidates, 
     "visits": 500,
     "currentPlayer": "B",
     "rawWinrate": 0.508,
-    "rawScoreMean": 1.2
+    "rawScoreMean": 1.2,
+    "rawStScoreError": 8.5
   },
-  "ownership": [0.85, 0.92, -0.15, ...]
+  "ownership": [0.85, 0.92, -0.15, ...],
+  "ownershipStdev": [0.12, 0.15, 0.18, ...],
+  "policy": [0.001, 0.002, 0.18, ...]
 }
 ```
+
+**Response Fields:**
+- `id` (string): Request identifier (echoed from request or generated)
+- `turnNumber` (integer): Number of moves played
+- `isDuringSearch` (boolean): Whether this is a partial result during search
+- `moveInfos` (array, optional): Analysis of each move candidate
+  - `moveCoord` (string): Move coordinate
+  - `visits` (integer): Number of visits during search
+  - `winrate` (float): Win probability for this move
+  - `scoreMean` (float): Expected score
+  - `scoreStdev` (float): Score standard deviation
+  - `scoreLead` (float): Expected score lead
+  - `utility` (float): Utility value
+  - `utilityLcb` (float, optional): Lower confidence bound on utility
+  - `lcb` (float): Lower confidence bound on winrate
+  - `prior` (float): Neural network prior probability
+  - `order` (integer): Search order ranking
+  - `pv` (array, optional): Principal variation (best continuation)
+  - `pvVisits` (array, optional): Visit counts for each move in PV
+  - `ownership` (array, optional): Ownership predictions after this move
+- `rootInfo` (object, optional): Overall position evaluation
+  - `winrate` (float): Current win probability
+  - `scoreLead` (float): Expected score lead
+  - `utility` (float): Utility value
+  - `visits` (integer): Total visits
+  - `currentPlayer` (string): Current player to move ("B" or "W")
+  - `rawWinrate` (float, optional): Raw neural network winrate
+  - `rawScoreMean` (float, optional): Raw neural network score
+  - `rawStScoreError` (float, optional): Raw score error estimate
+- `ownership` (array, optional): Territory ownership predictions [-1 to 1] for each intersection
+- `ownershipStdev` (array, optional): Ownership standard deviation for each intersection
+- `policy` (array, optional): Raw neural network policy for each intersection
 
 ### 2. Version Information
 
@@ -264,9 +326,22 @@ Get server and KataGo version information.
   "katago": {
     "version": "1.15.3",
     "gitHash": "abc123def"
+  },
+  "model": {
+    "name": "kata1-b18c384nbt-s9131461376-d4087399203.bin.gz"
   }
 }
 ```
+
+**Response Fields:**
+- `server` (object): Server information
+  - `name` (string): Server name
+  - `version` (string): Server version
+- `katago` (object, optional): KataGo version information (may not be available in all modes)
+  - `version` (string): KataGo version
+  - `gitHash` (string, optional): Git commit hash
+- `model` (object): Neural network model information
+  - `name` (string): Model filename
 
 ### 3. Health Check
 
@@ -280,6 +355,11 @@ Get server and KataGo version information.
   "uptime": 3600
 }
 ```
+
+**Response Fields:**
+- `status` (string): Health status ("healthy")
+- `timestamp` (string, optional): Current timestamp in RFC3339 format
+- `uptime` (integer, optional): Server uptime in seconds
 
 ### 4. Clear Cache
 
