@@ -1,7 +1,43 @@
 # Example values for different deployment scenarios
 
 # ==============================================================================
-# Example 1: Basic CPU deployment with resource limits
+# Example 1: Basic CPU deployment with custom model download
+# ==============================================================================
+# replicaCount: 1
+#
+# image:
+#   tag: "latest"
+#   variant: ""
+#
+# resources:
+#   limits:
+#     cpu: 4000m
+#     memory: 2Gi
+#   requests:
+#     cpu: 2000m
+#     memory: 1Gi
+#
+# config:
+#   logLevel: info
+#   customModel:
+#     enabled: true
+#     url: "https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file"
+#     filename: "kata1-b40c256.bin.gz"
+#     # Optional: Add checksum for validation
+#     # sha256sum: "abc123..."
+#   customConfig: |
+#     [server]
+#     host = "0.0.0.0"
+#     port = 2718
+#
+#     [katago]
+#     katago_path = "./katago"
+#     model_path = "/app/models/kata1-b40c256.bin.gz"
+#     config_path = "./gtp_config.cfg"
+#     move_timeout_secs = 30
+
+# ==============================================================================
+# Example 2: Basic CPU deployment with resource limits
 # ==============================================================================
 # replicaCount: 1
 #
@@ -21,7 +57,7 @@
 #   logLevel: info
 
 # ==============================================================================
-# Example 2: GPU deployment (requires locally built GPU image)
+# Example 3: GPU deployment (requires locally built GPU image)
 # ==============================================================================
 # replicaCount: 1
 #
@@ -51,7 +87,7 @@
 #     effect: NoSchedule
 
 # ==============================================================================
-# Example 3: Production deployment with autoscaling and ingress
+# Example 4: Production deployment with autoscaling and ingress
 # ==============================================================================
 # replicaCount: 3
 #
@@ -102,7 +138,7 @@
 #   interval: 30s
 
 # ==============================================================================
-# Example 4: Minimal variant with custom model (PVC)
+# Example 5: Minimal variant with custom model (PVC)
 # ==============================================================================
 # image:
 #   tag: "latest"
@@ -131,7 +167,7 @@
 #     move_timeout_secs = 30
 
 # ==============================================================================
-# Example 5: High availability deployment with topology spread
+# Example 6: High availability deployment with topology spread
 # ==============================================================================
 # replicaCount: 5
 #

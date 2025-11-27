@@ -101,6 +101,17 @@ The following table lists the configurable parameters of the KataGo Server chart
 | `config.katago.configPath` | GTP config path (minimal variant) | `/models/gtp_config.cfg` |
 | `config.katago.moveTimeoutSecs` | Move timeout in seconds | `20` |
 
+### Custom Model Download
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `config.customModel.enabled` | Enable custom model download via init container | `false` |
+| `config.customModel.url` | URL to download the model from | `""` |
+| `config.customModel.filename` | Filename to save the model as | `"custom-model.bin.gz"` |
+| `config.customModel.sha256sum` | Optional SHA256 checksum for validation | `""` |
+| `config.customModel.initImage` | Init container image for downloading | `"busybox:1.36"` |
+| `config.customModel.initResources` | Resource limits for init container | See values.yaml |
+
 ## Examples
 
 ### Basic CPU Deployment
@@ -129,6 +140,58 @@ Install:
 ```bash
 helm install katago katago-server/katago-server -f values-cpu.yaml
 ```
+
+### CPU Deployment with Custom Model Download
+
+Download a custom KataGo model automatically via init container:
+
+```yaml
+# values-custom-model.yaml
+replicaCount: 1
+
+image:
+  tag: "latest"
+  variant: ""
+
+resources:
+  limits:
+    cpu: 4000m
+    memory: 2Gi
+  requests:
+    cpu: 2000m
+    memory: 1Gi
+
+config:
+  logLevel: info
+  customModel:
+    enabled: true
+    # Download a stronger 40-block model
+    url: "https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file"
+    filename: "kata1-b40c256.bin.gz"
+    # Optional: Add checksum for validation
+    # sha256sum: "your-sha256-checksum-here"
+  customConfig: |
+    [server]
+    host = "0.0.0.0"
+    port = 2718
+
+    [katago]
+    katago_path = "./katago"
+    model_path = "/app/models/kata1-b40c256.bin.gz"
+    config_path = "./gtp_config.cfg"
+    move_timeout_secs = 30
+```
+
+Install:
+```bash
+helm install katago katago-server/katago-server -f values-custom-model.yaml
+```
+
+The init container will:
+1. Download the model from the specified URL before the main container starts
+2. Optionally verify the SHA256 checksum
+3. Place the model at `/app/models/<filename>` (mounted as emptyDir)
+4. The main container will have read-only access to the downloaded model
 
 ### GPU Deployment
 

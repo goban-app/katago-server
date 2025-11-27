@@ -162,6 +162,28 @@ config:
     # Move timeout in seconds
     moveTimeoutSecs: 20
 
+  # Custom model download via init container
+  # If enabled, downloads a custom model before the main container starts
+  customModel:
+    enabled: false
+    # URL to download the model from
+    # Example: https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file
+    url: ""
+    # Filename to save the model as (will be placed in /app/custom-model.bin.gz)
+    filename: "custom-model.bin.gz"
+    # Optional: SHA256 checksum for validation
+    sha256sum: ""
+    # Init container image for downloading (must have wget)
+    initImage: "busybox:1.36"
+    # Resource limits for init container
+    initResources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
   # Custom config.toml (optional)
   # If provided, this will be mounted as a ConfigMap
   customConfig: ""

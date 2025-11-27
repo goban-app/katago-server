@@ -45,6 +45,36 @@ spec:
       hostAliases:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.config.customModel.enabled }}
+      initContainers:
+      - name: download-model
+        image: {{ .Values.config.customModel.initImage }}
+        command:
+        - sh
+        - -c
+        - |
+          set -e
+          echo "Downloading custom model from {{ .Values.config.customModel.url }}"
+          wget -O /models/{{ .Values.config.customModel.filename }} "{{ .Values.config.customModel.url }}"
+          {{- if .Values.config.customModel.sha256sum }}
+          echo "Verifying checksum..."
+          echo "{{ .Values.config.customModel.sha256sum }}  /models/{{ .Values.config.customModel.filename }}" | sha256sum -c -
+          {{- end }}
+          echo "Model downloaded successfully to /models/{{ .Values.config.customModel.filename }}"
+          ls -lh /models/
+        volumeMounts:
+        - name: custom-model
+          mountPath: /models
+        resources:
+          {{- toYaml .Values.config.customModel.initResources | nindent 10 }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
+      {{- end }}
       containers:
       - name: {{ .Chart.Name }}
         securityContext:
@@ -103,6 +133,11 @@ spec:
           mountPath: /config
           readOnly: true
         {{- end }}
+        {{- if .Values.config.customModel.enabled }}
+        - name: custom-model
+          mountPath: /app/models
+          readOnly: true
+        {{- end }}
         {{- with .Values.volumeMounts }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -115,6 +150,10 @@ spec:
       - name: config
         configMap:
           name: {{ include "katago-server.fullname" . }}-config
+      {{- end }}
+      {{- if .Values.config.customModel.enabled }}
+      - name: custom-model
+        emptyDir: {}
       {{- end }}
       {{- with .Values.volumes }}
       {{- toYaml . | nindent 6 }}
