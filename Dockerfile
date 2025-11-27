@@ -62,7 +62,7 @@ COPY --from=rust-builder /app/target/release/katago-server /app/
 
 # Copy config templates
 COPY config.toml.example /app/config.toml.example
-COPY gtp_config.cfg.example /app/gtp_config.cfg.example
+COPY analysis_config.cfg.example /app/analysis_config.cfg.example
 
 EXPOSE 2718
 ENV RUST_LOG=debug
@@ -163,7 +163,7 @@ RUN set -ex; \
 COPY --from=katago-cpu-builder /build/KataGo/cpp/katago /app/katago
 
 # Copy configuration
-COPY gtp_config.cfg.cpu /app/gtp_config.cfg
+COPY analysis_config.cfg.cpu /app/analysis_config.cfg
 COPY docker-setup.sh /app/
 
 # Download model and configure
@@ -218,7 +218,6 @@ FROM base AS minimal
 
 # Create default configs pointing to mounted paths
 RUN cp config.toml.example config.toml && \
-    cp gtp_config.cfg.example gtp_config.cfg && \
     sed -i 's|katago_path = "./katago"|katago_path = "/models/katago"|' config.toml && \
     sed -i 's|model_path = ".*"|model_path = "/models/model.bin.gz"|' config.toml && \
-    sed -i 's|config_path = ".*"|config_path = "/models/gtp_config.cfg"|' config.toml
+    sed -i 's|config_path = ".*"|config_path = "/models/analysis_config.cfg"|' config.toml

@@ -15,7 +15,7 @@ impl Default for KatagoConfig {
         Self {
             katago_path: "./katago".to_string(),
             model_path: "./model.bin.gz".to_string(),
-            config_path: "./gtp_config.cfg".to_string(),
+            config_path: "./analysis_config.cfg".to_string(),
             move_timeout_secs: 20,
         }
     }
