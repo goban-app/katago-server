@@ -28,7 +28,7 @@ A high-performance REST API server for KataGo, written in Rust using Axum. Provi
 - Rust 1.70 or later
 - KataGo binary (download from [KataGo releases](https://github.com/lightvector/KataGo/releases))
 - A KataGo neural network model (e.g., `kata1-b18c384nbt-s*.bin.gz`)
-- A KataGo GTP config file
+- A KataGo Analysis Engine config file (see setup instructions below)
 
 ## Installation
 
@@ -93,41 +93,46 @@ wget -O model.bin.gz https://katagotraining.org/api/networks/kata1-b28c512nbt-s1
 wget -O model.bin.gz https://katagotraining.org/api/networks/kata1-b40c256-s11840935168-d2898845681/network_file
 ```
 
-### 4. Create a GTP Configuration File
+### 4. Create an Analysis Engine Configuration File
 
-Create `gtp_config.cfg`:
+Create `analysis_config.cfg`:
 
 ```ini
-# Basic GTP config for KataGo
-# Adjust based on your hardware
+# KataGo Analysis Engine Configuration
+# This server uses KataGo's Analysis Engine mode (not GTP mode)
+# for better performance and batching support
 
-# Number of threads to use
-numSearchThreads = 4
+# Logging
+logDir = analysis_logs
+logSearchInfo = false
 
-# Maximum number of visits to search
-maxVisits = 500
+# Analysis behavior
+reportAnalysisWinratesAs = SIDETOMOVE
+maxVisits = 50
 
-# Pondering (thinking during opponent's turn) - false for server
-ponderingEnabled = false
+# Threading configuration - adjust based on your hardware
+# For CPU-only deployments (conservative settings):
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
 
-# GPU settings (set to -1 to use all GPUs, or specific ID)
-# numNNServerThreadsPerModel = 1
-# nnMaxBatchSize = 16
+# For GPU deployments (more aggressive):
+# numAnalysisThreads = 4
+# numSearchThreadsPerAnalysisThread = 4
 
-# For CPU-only (slower):
+# Neural network batching
+# CPU settings:
+nnMaxBatchSize = 8
+numNNServerThreadsPerModel = 2
+
+# GPU settings:
+# nnMaxBatchSize = 32
 # numNNServerThreadsPerModel = 2
-# nnMaxBatchSize = 8
 
-# Rules
-rules = chinese
-koRule = POSITIONAL
-scoringRule = AREA
-taxRule = NONE
-multiStoneSuicideLegal = false
-
-# Analysis settings
-analysisWideRootNoise = 0.0
+# Performance tuning
+nnCacheSizePowerOfTwo = 20  # ~1M cache entries
 ```
+
+**Note:** This server uses KataGo's [Analysis Engine mode](https://github.com/lightvector/KataGo/blob/master/docs/Analysis_Engine.md), which is optimized for backend services and supports efficient batching of multiple analysis requests.
 
 ### 5. Build the Project
 
@@ -149,7 +154,7 @@ port = 2718
 [katago]
 katago_path = "./katago"
 model_path = "./kata1-b18c384nbt-s9131461376-d4087399203.bin.gz"
-config_path = "./gtp_config.cfg"
+config_path = "./analysis_config.cfg"
 move_timeout_secs = 20
 ```
 
@@ -160,7 +165,7 @@ export KATAGO_SERVER_HOST="0.0.0.0"
 export KATAGO_SERVER_PORT="2718"
 export KATAGO_KATAGO_PATH="./katago"
 export KATAGO_MODEL_PATH="./model.bin.gz"
-export KATAGO_CONFIG_PATH="./gtp_config.cfg"
+export KATAGO_CONFIG_PATH="./analysis_config.cfg"
 export KATAGO_MOVE_TIMEOUT_SECS="20"
 ```
 
@@ -501,23 +506,27 @@ server {
 
 ### KataGo Configuration
 
-Adjust `gtp_config.cfg` based on your hardware:
+Adjust `analysis_config.cfg` based on your hardware:
 
 **For GPU:**
 ```ini
-numSearchThreads = 8
-maxVisits = 800
+numAnalysisThreads = 4
+numSearchThreadsPerAnalysisThread = 4
+maxVisits = 500
 numNNServerThreadsPerModel = 2
 nnMaxBatchSize = 32
 ```
 
 **For CPU:**
 ```ini
-numSearchThreads = 4
-maxVisits = 400
-numNNServerThreadsPerModel = 1
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
+maxVisits = 50
+numNNServerThreadsPerModel = 2
 nnMaxBatchSize = 8
 ```
+
+**Note:** For CPU deployments, keep threading conservative (1x1) to avoid timeouts. GPU deployments can handle more parallelism (4x4).
 
 ### Server Configuration
 
@@ -731,18 +740,20 @@ Then update `config.toml` to point to `/app/my-model.bin.gz`.
 
 ### CPU vs GPU Configuration
 
-**CPU Configuration** (`gtp_config.cfg`):
+**CPU Configuration** (`analysis_config.cfg`):
 ```ini
-numSearchThreads = 2
-maxVisits = 200
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
+maxVisits = 50
 numNNServerThreadsPerModel = 2
 nnMaxBatchSize = 8
 ```
 
-**GPU Configuration** (`gtp_config.cfg`):
+**GPU Configuration** (`analysis_config.cfg`):
 ```ini
-numSearchThreads = 8
-maxVisits = 800
+numAnalysisThreads = 4
+numSearchThreadsPerAnalysisThread = 4
+maxVisits = 500
 numNNServerThreadsPerModel = 2
 nnMaxBatchSize = 32
 ```

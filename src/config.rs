@@ -15,7 +15,7 @@ impl Default for KatagoConfig {
         Self {
             katago_path: "./katago".to_string(),
             model_path: "./model.bin.gz".to_string(),
-            config_path: "./gtp_config.cfg".to_string(),
+            config_path: "./analysis_config.cfg".to_string(),
             move_timeout_secs: 20,
         }
     }
@@ -102,7 +102,7 @@ mod tests {
         assert_eq!(config.server.port, 2718);
         assert_eq!(config.katago.katago_path, "./katago");
         assert_eq!(config.katago.model_path, "./model.bin.gz");
-        assert_eq!(config.katago.config_path, "./gtp_config.cfg");
+        assert_eq!(config.katago.config_path, "./analysis_config.cfg");
         assert_eq!(config.katago.move_timeout_secs, 20);
     }
 
@@ -118,7 +118,7 @@ mod tests {
         let config = KatagoConfig::default();
         assert_eq!(config.katago_path, "./katago");
         assert_eq!(config.model_path, "./model.bin.gz");
-        assert_eq!(config.config_path, "./gtp_config.cfg");
+        assert_eq!(config.config_path, "./analysis_config.cfg");
         assert_eq!(config.move_timeout_secs, 20);
     }
 

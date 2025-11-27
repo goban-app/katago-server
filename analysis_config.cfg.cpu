@@ -1,0 +1,31 @@
+# KataGo Analysis Engine Configuration - CPU optimized
+# For use with "katago analysis" command
+
+# Logging
+logDir = analysis_logs
+logSearchInfo = false
+logAllRequests = false
+logAllResponses = false
+
+# Analysis behavior
+reportAnalysisWinratesAs = SIDETOMOVE
+maxVisits = 10
+
+# Threading configuration for CPU
+# numAnalysisThreads: number of positions to analyze in parallel
+# numSearchThreadsPerAnalysisThread: threads per position search
+# Total active threads = numAnalysisThreads * numSearchThreadsPerAnalysisThread
+# Conservative settings for CPU-only deployment
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
+
+# Neural network batching (CPU optimized)
+nnMaxBatchSize = 8
+numNNServerThreadsPerModel = 2
+
+# Search behavior
+# conservativePass = true
+# ignorePreRootHistory = true
+
+# Performance tuning for CPU
+nnCacheSizePowerOfTwo = 20  # ~1M cache entries

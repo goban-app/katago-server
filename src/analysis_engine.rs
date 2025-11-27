@@ -2,26 +2,29 @@ use crate::api::{AnalysisRequest, AnalysisResponse, MoveInfo, RootInfo};
 use crate::config::KatagoConfig;
 use crate::error::{KatagoError, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::thread;
 use std::time::Duration;
-use tokio::sync::{mpsc, Mutex as TokioMutex};
+use tokio::sync::oneshot;
 use tokio::time::timeout;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// JSON request format for KataGo analysis engine
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AnalysisQuery {
     id: String,
+    initial_stones: Vec<Vec<String>>,
     moves: Vec<Vec<String>>,
     rules: String,
     komi: f32,
     board_x_size: u8,
     board_y_size: u8,
-    analyze_turns: Vec<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    analyze_turns: Option<Vec<u32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_visits: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,6 +39,7 @@ struct AnalysisQuery {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AnalysisResult {
+    #[allow(dead_code)] // Used for routing responses, not directly accessed
     id: String,
     #[serde(default)]
     turn_number: u32,
@@ -94,21 +98,21 @@ pub struct AnalysisEngine {
     config: KatagoConfig,
     process: Arc<StdMutex<Option<Child>>>,
     stdin: Arc<StdMutex<Option<ChildStdin>>>,
-    response_rx: Arc<TokioMutex<mpsc::UnboundedReceiver<String>>>,
+    pending_requests: Arc<StdMutex<HashMap<String, oneshot::Sender<String>>>>,
 }
 
 impl AnalysisEngine {
     pub fn new(config: KatagoConfig) -> Result<Self> {
-        let (response_tx, response_rx) = mpsc::unbounded_channel();
+        let pending_requests = Arc::new(StdMutex::new(HashMap::new()));
 
         let mut engine = Self {
             config: config.clone(),
             process: Arc::new(StdMutex::new(None)),
             stdin: Arc::new(StdMutex::new(None)),
-            response_rx: Arc::new(TokioMutex::new(response_rx)),
+            pending_requests: pending_requests.clone(),
         };
 
-        engine.start_process(response_tx)?;
+        engine.start_process(pending_requests)?;
 
         // Wait a bit for initialization
         thread::sleep(Duration::from_millis(500));
@@ -116,8 +120,15 @@ impl AnalysisEngine {
         Ok(engine)
     }
 
-    fn start_process(&mut self, response_tx: mpsc::UnboundedSender<String>) -> Result<()> {
+    fn start_process(
+        &mut self,
+        pending_requests: Arc<StdMutex<HashMap<String, oneshot::Sender<String>>>>,
+    ) -> Result<()> {
         info!("Starting KataGo analysis engine");
+        info!(
+            "Config: katago={}, model={}, config={}",
+            self.config.katago_path, self.config.model_path, self.config.config_path
+        );
 
         let mut cmd = Command::new(&self.config.katago_path)
             .arg("analysis")
@@ -163,14 +174,38 @@ impl AnalysisEngine {
 
         // Spawn stdout reader thread
         thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                match line {
-                    Ok(line) => {
-                        debug!("KataGo analysis: {}", line);
-                        if let Err(e) = response_tx.send(line) {
-                            error!("Failed to send response: {}", e);
-                            break;
+            let mut reader = BufReader::new(stdout);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                match reader.read_line(&mut line) {
+                    Ok(0) => {
+                        info!("KataGo analysis stdout closed (EOF)");
+                        break;
+                    }
+                    Ok(_) => {
+                        let trimmed = line.trim();
+                        debug!("KataGo analysis raw output: {}", trimmed);
+
+                        // Parse ID from response to route it
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                            if let Some(id) = value.get("id").and_then(|id| id.as_str()) {
+                                let mut requests = pending_requests.lock().unwrap();
+                                if let Some(sender) = requests.remove(id) {
+                                    if sender.send(trimmed.to_string()).is_err() {
+                                        warn!("Failed to send response to waiter for ID: {}", id);
+                                    }
+                                } else {
+                                    // This might be a log message or unexpected response
+                                    debug!("Received response for unknown or timed-out ID: {}", id);
+                                }
+                            } else {
+                                // Maybe a log line or something without ID
+                                debug!("Received JSON without ID: {}", trimmed);
+                            }
+                        } else {
+                            // Not JSON, probably a log line
+                            debug!("Received non-JSON output: {}", trimmed);
                         }
                     }
                     Err(e) => {
@@ -179,7 +214,7 @@ impl AnalysisEngine {
                     }
                 }
             }
-            info!("KataGo analysis stdout closed");
+            info!("KataGo analysis stdout reader thread exiting");
         });
 
         Ok(())
@@ -193,36 +228,54 @@ impl AnalysisEngine {
         let stdin = stdin.as_mut().ok_or(KatagoError::ProcessDied)?;
 
         writeln!(stdin, "{}", json)?;
-        stdin.flush()?;
+        debug!("Written query to stdin, flushing...");
+        match stdin.flush() {
+            Ok(_) => debug!("Stdin flushed successfully"),
+            Err(e) => error!("Failed to flush stdin: {}", e),
+        }
         Ok(())
     }
 
     async fn wait_for_response(&self, id: &str, timeout_secs: u64) -> Result<AnalysisResult> {
+        let (tx, rx) = oneshot::channel();
+
+        {
+            let mut requests = self.pending_requests.lock().unwrap();
+            requests.insert(id.to_string(), tx);
+        }
+
         let duration = Duration::from_secs(timeout_secs);
 
-        timeout(duration, async {
-            loop {
-                let mut rx = self.response_rx.lock().await;
-                if let Some(response) = rx.recv().await {
-                    // Try to parse as JSON
-                    if let Ok(result) = serde_json::from_str::<AnalysisResult>(&response) {
-                        if result.id == id {
-                            return Ok(result);
+        match timeout(duration, rx).await {
+            Ok(Ok(response)) => {
+                // Parse the response
+                match serde_json::from_str::<AnalysisResult>(&response) {
+                    Ok(result) => Ok(result),
+                    Err(e) => {
+                        // Check for error response
+                        if let Ok(error) = serde_json::from_str::<serde_json::Value>(&response) {
+                            if let Some(err_msg) = error.get("error") {
+                                error!("KataGo returned error: {}", err_msg);
+                                return Err(KatagoError::ResponseError(err_msg.to_string()));
+                            }
                         }
+                        Err(KatagoError::ParseError(e.to_string()))
                     }
-                    // Also handle error responses
-                    if let Ok(error) = serde_json::from_str::<serde_json::Value>(&response) {
-                        if let Some(err_msg) = error.get("error") {
-                            return Err(KatagoError::ResponseError(err_msg.to_string()));
-                        }
-                    }
-                } else {
-                    return Err(KatagoError::ProcessDied);
                 }
             }
-        })
-        .await
-        .map_err(|_| KatagoError::Timeout(timeout_secs))?
+            Ok(Err(_)) => {
+                // Sender dropped (process died?)
+                Err(KatagoError::ProcessDied)
+            }
+            Err(_) => {
+                // Timeout
+                {
+                    let mut requests = self.pending_requests.lock().unwrap();
+                    requests.remove(id);
+                }
+                Err(KatagoError::Timeout(timeout_secs))
+            }
+        }
     }
 
     pub async fn analyze(&self, request: &AnalysisRequest) -> Result<AnalysisResponse> {
@@ -231,19 +284,18 @@ impl AnalysisEngine {
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        // Convert moves to KataGo format: [["B", "D4"], ["W", "Q16"], ...]
+        // Convert moves to KataGo format: [["b", "D4"], ["w", "Q16"], ...]
+        // Note: KataGo requires lowercase b/w (confirmed by Python implementation and testing)
         let mut katago_moves = Vec::new();
-        let mut color = "B";
+        let mut color = "b";
         for mv in &request.moves {
             katago_moves.push(vec![color.to_string(), mv.clone()]);
-            color = if color == "B" { "W" } else { "B" };
+            color = if color == "b" { "w" } else { "b" };
         }
-
-        // Analyze the final position (after all moves)
-        let turn_to_analyze = request.moves.len() as u32;
 
         let query = AnalysisQuery {
             id: request_id.clone(),
+            initial_stones: vec![], // Empty for standard games (could support handicap via API later)
             moves: katago_moves,
             rules: request.rules.clone().unwrap_or_else(|| {
                 // Auto-detect rules from komi
@@ -257,8 +309,11 @@ impl AnalysisEngine {
             komi: request.komi.unwrap_or(7.5),
             board_x_size: request.board_x_size,
             board_y_size: request.board_y_size,
-            analyze_turns: vec![turn_to_analyze],
-            max_visits: request.max_visits,
+            // Let analyzeTurns default to analyzing the final position
+            analyze_turns: None,
+            // Always include maxVisits - KataGo requires this to start analysis
+            // Default to 10 for fast CPU execution (increase for GPU or stronger analysis)
+            max_visits: Some(request.max_visits.unwrap_or(10)),
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
             include_pv_visits: request.include_pv_visits,
@@ -340,41 +395,56 @@ impl AnalysisEngine {
 
         let json = serde_json::to_string(&query)?;
 
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut requests = self.pending_requests.lock().unwrap();
+            requests.insert(query_id.clone(), tx);
+        }
+
         // Send query (ensure mutex is dropped before await)
         {
             let mut stdin = self.stdin.lock().unwrap();
             let stdin = stdin.as_mut().ok_or(KatagoError::ProcessDied)?;
             writeln!(stdin, "{}", json)?;
-            stdin.flush()?;
+            debug!("Written version query to stdin, flushing...");
+            match stdin.flush() {
+                Ok(_) => debug!("Stdin flushed successfully"),
+                Err(e) => error!("Failed to flush stdin: {}", e),
+            }
         } // Mutex guard dropped here
 
         // Wait for version response
         let duration = Duration::from_secs(5);
-        timeout(duration, async {
-            loop {
-                let mut rx = self.response_rx.lock().await;
-                if let Some(response) = rx.recv().await {
-                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
-                        if value.get("id").and_then(|id| id.as_str()) == Some(&query_id) {
-                            let version = value
-                                .get("version")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            let git_hash = value
-                                .get("git_hash")
-                                .and_then(|h| h.as_str())
-                                .map(|s| s.to_string());
-                            return Ok((version, git_hash));
-                        }
+
+        match timeout(duration, rx).await {
+            Ok(Ok(response)) => {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&response) {
+                    if value.get("id").and_then(|id| id.as_str()) == Some(&query_id) {
+                        let version = value
+                            .get("version")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        let git_hash = value
+                            .get("git_hash")
+                            .and_then(|h| h.as_str())
+                            .map(|s| s.to_string());
+                        return Ok((version, git_hash));
                     }
-                } else {
-                    return Err(KatagoError::ProcessDied);
                 }
+                Err(KatagoError::ParseError(
+                    "Failed to parse version response".to_string(),
+                ))
             }
-        })
-        .await
-        .map_err(|_| KatagoError::Timeout(5))?
+            Ok(Err(_)) => Err(KatagoError::ProcessDied),
+            Err(_) => {
+                {
+                    let mut requests = self.pending_requests.lock().unwrap();
+                    requests.remove(&query_id);
+                }
+                Err(KatagoError::Timeout(5))
+            }
+        }
     }
 
     pub fn model_path(&self) -> &str {
