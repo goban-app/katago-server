@@ -3,6 +3,30 @@ entries:
   katago-server:
   - apiVersion: v2
     appVersion: 0.2.1
+    created: "2025-11-27T16:43:54.977854997Z"
+    description: A Helm chart for KataGo Server - High-performance REST API server
+      for KataGo
+    digest: b647517b7c9e57b765c8062e42486738000718cd837fdb74113a24ecb8bfe99c
+    home: https://github.com/stubbi/katago-server
+    icon: https://raw.githubusercontent.com/lightvector/KataGo/master/images/icon.png
+    keywords:
+    - katago
+    - go
+    - game
+    - ai
+    - rest-api
+    maintainers:
+    - name: stubbi
+      url: https://github.com/stubbi
+    name: katago-server
+    sources:
+    - https://github.com/stubbi/katago-server
+    type: application
+    urls:
+    - https://github.com/stubbi/katago-server/releases/download/katago-server-0.2.2/katago-server-0.2.2.tgz
+    version: 0.2.2
+  - apiVersion: v2
+    appVersion: 0.2.1
     created: "2025-11-27T15:25:22.835970467Z"
     description: A Helm chart for KataGo Server - High-performance REST API server
       for KataGo
@@ -25,4 +49,4 @@ entries:
     urls:
     - https://github.com/stubbi/katago-server/releases/download/katago-server-0.2.1/katago-server-0.2.1.tgz
     version: 0.2.1
-generated: "2025-11-27T15:25:22.835981147Z"
+generated: "2025-11-27T16:43:54.977866869Z"
