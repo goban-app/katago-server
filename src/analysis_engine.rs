@@ -312,7 +312,7 @@ impl AnalysisEngine {
             // Let analyzeTurns default to analyzing the final position
             analyze_turns: None,
             // Always include maxVisits - KataGo requires this to start analysis
-            max_visits: Some(request.max_visits.unwrap_or(10)),
+            max_visits: Some(request.max_visits.unwrap_or(50)),
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
             include_pv_visits: request.include_pv_visits,

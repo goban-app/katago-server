@@ -157,8 +157,8 @@ config:
     path: /models/katago
     # Path to model file (if using minimal variant with volume mounts)
     modelPath: /models/model.bin.gz
-    # Path to GTP config file (if using minimal variant with volume mounts)
-    configPath: /models/gtp_config.cfg
+    # Path to KataGo Analysis Engine config file (if using minimal variant with volume mounts)
+    configPath: /models/analysis_config.cfg
     # Move timeout in seconds
     moveTimeoutSecs: 20
 
@@ -195,7 +195,7 @@ config:
   #    [katago]
   #    katago_path = "./katago"
   #    model_path = "./model.bin.gz"
-  #    config_path = "./gtp_config.cfg"
+  #    config_path = "./analysis_config.cfg"
   #    move_timeout_secs = 20
 
 # For GPU support

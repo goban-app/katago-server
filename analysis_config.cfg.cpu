@@ -4,17 +4,18 @@
 # Logging
 logDir = analysis_logs
 logSearchInfo = false
-logAllRequests = true
-logAllResponses = true
+logAllRequests = false
+logAllResponses = false
 
 # Analysis behavior
 reportAnalysisWinratesAs = SIDETOMOVE
-maxVisits = 10
+maxVisits = 50
 
 # Threading configuration for CPU
 # numAnalysisThreads: number of positions to analyze in parallel
 # numSearchThreadsPerAnalysisThread: threads per position search
 # Total active threads = numAnalysisThreads * numSearchThreadsPerAnalysisThread
+# Conservative settings for CPU-only deployment
 numAnalysisThreads = 1
 numSearchThreadsPerAnalysisThread = 1
 

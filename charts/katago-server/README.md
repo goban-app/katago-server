@@ -98,7 +98,7 @@ The following table lists the configurable parameters of the KataGo Server chart
 | `config.customConfig` | Custom config.toml content | `""` |
 | `config.katago.path` | KataGo binary path (minimal variant) | `/models/katago` |
 | `config.katago.modelPath` | Model file path (minimal variant) | `/models/model.bin.gz` |
-| `config.katago.configPath` | GTP config path (minimal variant) | `/models/gtp_config.cfg` |
+| `config.katago.configPath` | Analysis Engine config path (minimal variant) | `/models/analysis_config.cfg` |
 | `config.katago.moveTimeoutSecs` | Move timeout in seconds | `20` |
 
 ### Custom Model Download
