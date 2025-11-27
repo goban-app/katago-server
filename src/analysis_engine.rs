@@ -21,6 +21,7 @@ struct AnalysisQuery {
     komi: f32,
     board_x_size: u8,
     board_y_size: u8,
+    analyze_turns: Vec<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_visits: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -238,6 +239,9 @@ impl AnalysisEngine {
             color = if color == "B" { "W" } else { "B" };
         }
 
+        // Analyze the final position (after all moves)
+        let turn_to_analyze = request.moves.len() as u32;
+
         let query = AnalysisQuery {
             id: request_id.clone(),
             moves: katago_moves,
@@ -253,6 +257,7 @@ impl AnalysisEngine {
             komi: request.komi.unwrap_or(7.5),
             board_x_size: request.board_x_size,
             board_y_size: request.board_y_size,
+            analyze_turns: vec![turn_to_analyze],
             max_visits: request.max_visits,
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
