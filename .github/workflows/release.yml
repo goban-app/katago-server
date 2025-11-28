@@ -109,6 +109,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update Chart.yaml with tag version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "Updating Chart.yaml to version $VERSION"
+          sed -i "s/^version: .*/version: $VERSION/" charts/katago-server/Chart.yaml
+          sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" charts/katago-server/Chart.yaml
+
+          echo "Updated Chart.yaml:"
+          cat charts/katago-server/Chart.yaml
+
       - name: Configure Git
         run: |
           git config user.name "$GITHUB_ACTOR"
