@@ -135,13 +135,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.image.outputs.name }}
-          flavor: |
-            suffix=${{ matrix.variant == 'cpu' && '' || format('-{0}', matrix.variant) }},onlatest=true
           tags: |
-            type=raw,value=${{ needs.detect-version-change.outputs.new_version }}
-            type=raw,value=latest
+            type=raw,value=${{ needs.detect-version-change.outputs.new_version }}-${{ matrix.variant }},enable=${{ matrix.variant != 'cpu' }}
+            type=raw,value=latest-${{ matrix.variant }},enable=${{ matrix.variant != 'cpu' }}
             type=raw,value=${{ needs.detect-version-change.outputs.new_version }}-cpu,enable=${{ matrix.variant == 'cpu' }}
+            type=raw,value=${{ needs.detect-version-change.outputs.new_version }},enable=${{ matrix.variant == 'cpu' }}
             type=raw,value=latest-cpu,enable=${{ matrix.variant == 'cpu' }}
+            type=raw,value=latest,enable=${{ matrix.variant == 'cpu' }}
           labels: |
             org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
             org.opencontainers.image.description=KataGo Server - ${{ matrix.variant }} variant
