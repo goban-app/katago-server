@@ -6,7 +6,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
 
 <p align="center">
-  <img src="assets/katago-mascot.png" alt="KataGo Server Mascot" width="400"/>
+  <img src="assets/katago-mascot.png" alt="KataGo Server Mascot" width="300">
 </p>
 
 A high-performance REST API server for KataGo, written in Rust using Axum. Provides a comprehensive, versioned API following REST best practices with RFC 7807 error handling for position analysis, move suggestions, and territory evaluation.
