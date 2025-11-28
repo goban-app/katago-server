@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/stubbi/katago-server/actions/workflows/ci.yml/badge.svg)](https://github.com/stubbi/katago-server/actions/workflows/ci.yml)
 [![Docker Image](https://img.shields.io/badge/docker-latest%20%7C%20latest--minimal-44cc11)](https://github.com/stubbi/katago-server/pkgs/container/katago-server)
+[![Helm Chart](https://img.shields.io/badge/helm-v1.0.0-0f1689?logo=helm)](https://stubbi.github.io/katago-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-orange.svg)](https://www.rust-lang.org)
 
@@ -25,7 +26,7 @@ A high-performance REST API server for KataGo, written in Rust using Axum. Provi
 
 ## Prerequisites
 
-- Rust 1.70 or later
+- Rust 1.80 or later (required for `LazyLock` feature)
 - KataGo binary (download from [KataGo releases](https://github.com/lightvector/KataGo/releases))
 - A KataGo neural network model (e.g., `kata1-b18c384nbt-s*.bin.gz`)
 - A KataGo Analysis Engine config file (see setup instructions below)
@@ -650,7 +651,7 @@ docker run -p 2718:2718 ghcr.io/stubbi/katago-server:latest
 **CPU with Custom Config**:
 ```bash
 docker run -p 2718:2718 \
-  -v $(pwd)/gtp_config.cfg:/app/gtp_config.cfg:ro \
+  -v $(pwd)/analysis_config.cfg:/app/analysis_config.cfg:ro \
   ghcr.io/stubbi/katago-server:latest
 ```
 
@@ -660,10 +661,13 @@ docker run -p 2718:2718 \
 # /my-models/
 #   ├── katago (binary)
 #   ├── my-custom-model.bin.gz
-#   └── gtp_config.cfg
+#   └── analysis_config.cfg
 
 docker run -p 2718:2718 \
-  -v /my-models:/models:ro \
+  -v /my-models:/app:ro \
+  -e KATAGO_KATAGO_PATH=/app/katago \
+  -e KATAGO_MODEL_PATH=/app/my-custom-model.bin.gz \
+  -e KATAGO_CONFIG_PATH=/app/analysis_config.cfg \
   ghcr.io/stubbi/katago-server:latest-minimal
 ```
 
@@ -731,12 +735,12 @@ All variants support mounting custom models and configurations:
 ```bash
 docker run -p 2718:2718 \
   -v $(pwd)/my-model.bin.gz:/app/my-model.bin.gz:ro \
-  -v $(pwd)/my-config.cfg:/app/gtp_config.cfg:ro \
+  -v $(pwd)/my-analysis-config.cfg:/app/analysis_config.cfg:ro \
   -v $(pwd)/config.toml:/app/config.toml:ro \
   ghcr.io/stubbi/katago-server:latest
 ```
 
-Then update `config.toml` to point to `/app/my-model.bin.gz`.
+Then update `config.toml` to point to `/app/my-model.bin.gz` and `/app/analysis_config.cfg`.
 
 ### CPU vs GPU Configuration
 
@@ -793,8 +797,8 @@ All images support both `linux/amd64` and `linux/arm64` architectures, automatic
 
 Contributions are welcome! Please feel free to submit issues or pull requests at [github.com/stubbi/katago-server](https://github.com/stubbi/katago-server).
 
-See EXAMPLES.md for usage patterns and client implementations.
-See ARCHITECTURE.md for design decisions and implementation details.
+See [EXAMPLES.md](EXAMPLES.md) for usage patterns and client implementations.
+See [RELEASING.md](RELEASING.md) for the release process and versioning guidelines.
 
 ## References
 

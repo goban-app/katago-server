@@ -178,7 +178,7 @@ config:
     [katago]
     katago_path = "./katago"
     model_path = "/app/models/kata1-b40c256.bin.gz"
-    config_path = "./gtp_config.cfg"
+    config_path = "./analysis_config.cfg"
     move_timeout_secs = 30
 ```
 
@@ -310,7 +310,7 @@ config:
     [katago]
     katago_path = "/models/katago"
     model_path = "/models/kata1-b40c256-s11840935168-d2898845681.bin.gz"
-    config_path = "/models/gtp_config.cfg"
+    config_path = "/models/analysis_config.cfg"
     move_timeout_secs = 30
 ```
 
@@ -364,12 +364,12 @@ kubectl logs <pod-name>
 kubectl port-forward svc/my-katago-server 2718:2718
 
 # Health check
-curl http://localhost:2718/health
+curl http://localhost:2718/api/v1/health
 
 # API test
-curl -X POST http://localhost:2718/select-move/katago_gtp_bot \
+curl -X POST http://localhost:2718/api/v1/analysis \
   -H "Content-Type: application/json" \
-  -d '{"board_size":19,"moves":["R4","D16"],"config":{"komi":7.5}}'
+  -d '{"moves":["R4","D16"],"komi":7.5,"rules":"chinese"}'
 ```
 
 ### Common Issues
