@@ -111,11 +111,13 @@ jobs:
 
   # ===========================================================================
   # Docker builds - verify all variants can be built
+  # NOTE: Skip on main branch pushes since these tests already run on PRs
   # ===========================================================================
   docker-verify:
     name: Verify Docker Build (${{ matrix.variant }})
     needs: [check, test]  # Start Docker builds early, fmt/clippy can run in parallel
     runs-on: ubuntu-latest
+    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
 
     strategy:
       fail-fast: false
@@ -205,11 +207,13 @@ jobs:
 
   # ===========================================================================
   # Smoke test - verify CPU variant works
+  # NOTE: Skip on main branch pushes since these tests already run on PRs
   # ===========================================================================
   docker-test:
     name: Smoke Test (CPU)
     needs: docker-verify
     runs-on: ubuntu-latest
+    if: github.event_name != 'push' || github.ref != 'refs/heads/main'
 
     steps:
       - name: Download CPU image
