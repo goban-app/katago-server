@@ -9,3 +9,16 @@ data:
   config.toml: |
     {{- .Values.config.customConfig | nindent 4 }}
 {{- end }}
+
+{{- if .Values.config.katago.analysisConfig }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "katago-server.fullname" . }}-analysis-config
+  labels:
+    {{- include "katago-server.labels" . | nindent 4 }}
+data:
+  analysis_config.cfg: |
+    {{- .Values.config.katago.analysisConfig | nindent 4 }}
+{{- end }}

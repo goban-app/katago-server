@@ -88,6 +88,8 @@ spec:
         env:
         - name: RUST_LOG
           value: {{ .Values.config.logLevel | quote }}
+        - name: KATAGO_MOVE_TIMEOUT_SECS
+          value: {{ .Values.config.katago.moveTimeoutSecs | quote }}
         {{- if .Values.config.customConfig }}
         - name: KATAGO_SERVER__CONFIG_PATH
           value: /config/config.toml
@@ -133,6 +135,12 @@ spec:
           mountPath: /config
           readOnly: true
         {{- end }}
+        {{- if .Values.config.katago.analysisConfig }}
+        - name: analysis-config
+          mountPath: /app/analysis_config.cfg
+          subPath: analysis_config.cfg
+          readOnly: true
+        {{- end }}
         {{- if .Values.config.customModel.enabled }}
         - name: custom-model
           mountPath: /app/models
@@ -150,6 +158,11 @@ spec:
       - name: config
         configMap:
           name: {{ include "katago-server.fullname" . }}-config
+      {{- end }}
+      {{- if .Values.config.katago.analysisConfig }}
+      - name: analysis-config
+        configMap:
+          name: {{ include "katago-server.fullname" . }}-analysis-config
       {{- end }}
       {{- if .Values.config.customModel.enabled }}
       - name: custom-model

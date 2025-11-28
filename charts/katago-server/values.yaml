@@ -150,7 +150,7 @@ config:
   # Logging level (trace, debug, info, warn, error)
   logLevel: info
 
-  # KataGo configuration (only applies to minimal variant)
+  # KataGo configuration
   # For minimal variant, you can mount your own KataGo binary and model
   katago:
     # Path to KataGo binary (if using minimal variant with volume mounts)
@@ -160,7 +160,32 @@ config:
     # Path to KataGo Analysis Engine config file (if using minimal variant with volume mounts)
     configPath: /models/analysis_config.cfg
     # Move timeout in seconds
-    moveTimeoutSecs: 20
+    moveTimeoutSecs: 60
+
+    # Analysis configuration
+    # This content will be mounted as analysis_config.cfg
+    analysisConfig: |
+      # KataGo Analysis Engine Configuration
+      # Logging
+      logDir = analysis_logs
+      logSearchInfo = false
+      logAllRequests = false
+      logAllResponses = false
+
+      # Analysis behavior
+      reportAnalysisWinratesAs = SIDETOMOVE
+      # maxVisits removed to allow per-request control or time-based limits
+
+      # Threading configuration
+      numAnalysisThreads = 1
+      numSearchThreadsPerAnalysisThread = 1
+
+      # Neural network batching
+      nnMaxBatchSize = 8
+      numNNServerThreadsPerModel = 2
+
+      # Performance tuning
+      nnCacheSizePowerOfTwo = 20
 
   # Custom model download via init container
   # If enabled, downloads a custom model before the main container starts
