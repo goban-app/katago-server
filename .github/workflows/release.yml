@@ -1,9 +1,38 @@
 name: Release
 
+# Chart version-based release workflow
+#
+# This workflow is triggered when Chart.yaml is modified on the main branch.
+# It automatically detects version changes and creates releases.
+#
+# Workflow:
+# 1. Detects if Chart.yaml version has changed (compares to previous commit)
+# 2. If version changed:
+#    - Validates semantic versioning format
+#    - Builds and pushes Docker images with the chart version
+#    - Releases Helm chart with that version
+#    - Automatically creates a git tag (e.g., v0.4.0)
+#    - Creates a GitHub release with documentation
+# 3. If version hasn't changed, workflow exits early (no release)
+#
+# Best practices:
+# - Chart.yaml is the single source of truth for versions
+# - Update Chart.yaml version in a PR, merge to main to trigger release
+# - Version must follow semantic versioning (X.Y.Z)
+# - Docker images and Helm chart versions are always synchronized
+# - Only releases push Docker images to GHCR (CI builds do not)
+#
+# To create a release:
+#   1. Update charts/katago-server/Chart.yaml (both version and appVersion)
+#   2. Commit and push to main (or merge a PR)
+#   3. Workflow automatically detects the change and releases
+
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'charts/katago-server/Chart.yaml'
 
 permissions:
   contents: write
@@ -16,10 +45,57 @@ env:
 
 jobs:
   # ===========================================================================
+  # Detect version change
+  # ===========================================================================
+  detect-version-change:
+    name: Detect Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check.outputs.changed }}
+      new_version: ${{ steps.check.outputs.version }}
+      previous_version: ${{ steps.check.outputs.previous_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need at least 2 commits to compare
+
+      - name: Check if version changed
+        id: check
+        run: |
+          # Get current version
+          CURRENT_VERSION=$(grep '^version:' charts/katago-server/Chart.yaml | awk '{print $2}')
+          echo "Current version: $CURRENT_VERSION"
+
+          # Get previous version (from parent commit)
+          PREVIOUS_VERSION=$(git show HEAD^:charts/katago-server/Chart.yaml | grep '^version:' | awk '{print $2}')
+          echo "Previous version: $PREVIOUS_VERSION"
+
+          # Check if version changed
+          if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+            echo "✓ Version changed from $PREVIOUS_VERSION to $CURRENT_VERSION"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            echo "previous_version=$PREVIOUS_VERSION" >> $GITHUB_OUTPUT
+
+            # Validate semantic versioning format
+            if ! echo "$CURRENT_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$'; then
+              echo "Error: Version '$CURRENT_VERSION' is not valid semantic versioning format"
+              echo "Expected format: X.Y.Z or X.Y.Z-prerelease or X.Y.Z+build"
+              exit 1
+            fi
+          else
+            echo "Version unchanged ($CURRENT_VERSION), skipping release"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ===========================================================================
   # Build and push versioned Docker images
   # ===========================================================================
   docker-release:
     name: Release Docker Image (${{ matrix.variant }})
+    needs: detect-version-change
+    if: needs.detect-version-change.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
 
     strategy:
@@ -62,14 +138,12 @@ jobs:
           flavor: |
             suffix=${{ matrix.variant == 'base' && '' || format('-{0}', matrix.variant) }},onlatest=true
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=${{ needs.detect-version-change.outputs.new_version }}
             type=raw,value=latest
-            type=raw,value=${{ matrix.variant }},enable=${{ matrix.variant == 'base' }}
           labels: |
             org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
             org.opencontainers.image.description=KataGo Server - ${{ matrix.variant }} variant
+            org.opencontainers.image.version=${{ needs.detect-version-change.outputs.new_version }}
 
       - name: Build and push Docker image
         id: push
@@ -82,9 +156,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           platforms: ${{ matrix.platforms }}
           cache-from: |
-            type=gha,scope=${{ matrix.variant }}-${{ github.ref_name }}
             type=gha,scope=${{ matrix.variant }}-main
-          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.variant }}-main
           provenance: false
           build-args: |
             GIT_SHA=${{ github.sha }}
@@ -101,7 +174,8 @@ jobs:
   # ===========================================================================
   helm-release:
     name: Release Helm Chart
-    needs: docker-release  # Wait for Docker images to be available
+    needs: [detect-version-change, docker-release]
+    if: needs.detect-version-change.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -119,45 +193,89 @@ jobs:
         with:
           version: 'v3.14.0'
 
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.7.0
+      - name: Install chart-releaser
+        run: |
+          wget https://github.com/helm/chart-releaser/releases/download/v1.6.1/chart-releaser_1.6.1_linux_amd64.tar.gz
+          tar -xzf chart-releaser_1.6.1_linux_amd64.tar.gz
+          sudo mv cr /usr/local/bin/cr
+          cr version
+
+      - name: Package and release Helm chart
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_OWNER: "${{ github.repository_owner }}"
+          CR_GIT_REPO: "${{ github.event.repository.name }}"
+        run: |
+          # Package the chart
+          helm package charts/katago-server -d .cr-release-packages
+
+          # Upload the chart to GitHub releases
+          cr upload --skip-existing
+
+          # Update the index
+          cr index --push
+
+  # ===========================================================================
+  # Create Git Tag
+  # ===========================================================================
+  create-tag:
+    name: Create Git Tag
+    needs: [detect-version-change, docker-release, helm-release]
+    if: needs.detect-version-change.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create and push tag
+        env:
+          VERSION: ${{ needs.detect-version-change.outputs.new_version }}
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+          TAG_NAME="v${VERSION}"
+
+          # Check if tag already exists
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists, skipping tag creation"
+          else
+            echo "Creating tag $TAG_NAME"
+            git tag -a "$TAG_NAME" -m "Release version $VERSION"
+            git push origin "$TAG_NAME"
+            echo "✓ Tag $TAG_NAME created and pushed"
+          fi
 
   # ===========================================================================
   # Create GitHub Release
   # ===========================================================================
   github-release:
     name: Create GitHub Release
-    needs: [docker-release, helm-release]
+    needs: [detect-version-change, docker-release, helm-release, create-tag]
+    if: needs.detect-version-change.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
-      - name: Extract chart version
-        id: chart
-        run: |
-          CHART_VERSION=$(grep '^version:' charts/katago-server/Chart.yaml | awk '{print $2}')
-          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
-
       - name: Create Release
+        env:
+          VERSION: ${{ needs.detect-version-change.outputs.new_version }}
         uses: softprops/action-gh-release@v2
         with:
-          name: Release ${{ steps.version.outputs.version }}
+          tag_name: v${{ needs.detect-version-change.outputs.new_version }}
+          name: Release ${{ needs.detect-version-change.outputs.new_version }}
           generate_release_notes: true
           body: |
             ## Docker Images
 
             This release includes the following Docker images:
 
-            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}` (CPU variant)
-            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}-minimal` (Minimal variant - BYO KataGo)
-            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}-base` (Base variant)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}` (CPU variant - default)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-minimal` (Minimal variant - BYO KataGo)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-base` (Base variant - binary only)
+
+            All images are available for `linux/amd64` and `linux/arm64` platforms.
 
             ## Helm Chart
 
@@ -166,12 +284,18 @@ jobs:
             ```bash
             helm repo add katago-server https://stubbi.github.io/katago-server
             helm repo update
-            helm install my-katago katago-server/katago-server --version ${{ steps.chart.outputs.version }}
+            helm install my-katago katago-server/katago-server --version ${{ needs.detect-version-change.outputs.new_version }}
             ```
 
             Or use the Docker images directly:
 
             ```bash
-            docker pull ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}
-            docker run -p 2718:2718 ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}
+            docker pull ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}
+            docker run -p 2718:2718 ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}
             ```
+
+            ## What's Changed
+
+            Version updated from ${{ needs.detect-version-change.outputs.previous_version }} → ${{ needs.detect-version-change.outputs.new_version }}
+
+            See the auto-generated release notes below for detailed changes.
