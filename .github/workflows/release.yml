@@ -193,27 +193,12 @@ jobs:
         with:
           version: 'v3.14.0'
 
-      - name: Install chart-releaser
-        run: |
-          wget https://github.com/helm/chart-releaser/releases/download/v1.6.1/chart-releaser_1.6.1_linux_amd64.tar.gz
-          tar -xzf chart-releaser_1.6.1_linux_amd64.tar.gz
-          sudo mv cr /usr/local/bin/cr
-          cr version
-
-      - name: Package and release Helm chart
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.7.0
+        with:
+          charts_dir: charts
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-          CR_OWNER: "${{ github.repository_owner }}"
-          CR_GIT_REPO: "${{ github.event.repository.name }}"
-        run: |
-          # Package the chart
-          helm package charts/katago-server -d .cr-release-packages
-
-          # Upload the chart to GitHub releases
-          cr upload --skip-existing
-
-          # Update the index
-          cr index --push
 
   # ===========================================================================
   # Create Git Tag
