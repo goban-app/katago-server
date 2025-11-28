@@ -236,6 +236,56 @@ impl AnalysisEngine {
         Ok(())
     }
 
+    /// Validates if a move coordinate is valid for the given board size
+    /// Go coordinates: A-Z (excluding I), 1-boardSize
+    fn is_valid_move(move_str: &str, board_x_size: u8, board_y_size: u8) -> bool {
+        if move_str.len() < 2 {
+            return false;
+        }
+
+        // Handle special case "pass"
+        if move_str.eq_ignore_ascii_case("pass") {
+            return true;
+        }
+
+        // Parse column (letter) and row (number)
+        let col_char = move_str.chars().next().unwrap().to_ascii_uppercase();
+        let row_str = &move_str[1..];
+
+        // Validate column (A-Z, excluding I)
+        // Column A=1, B=2, ..., H=8, J=9, K=10, ...
+        let col_num = if col_char < 'I' {
+            col_char as u8 - b'A' + 1
+        } else if col_char > 'I' {
+            col_char as u8 - b'A' // B is offset by 1 less because we skip I
+        } else {
+            // I is not a valid column in Go
+            return false;
+        };
+
+        if col_num > board_x_size {
+            return false;
+        }
+
+        // Validate row
+        if let Ok(row_num) = row_str.parse::<u8>() {
+            row_num >= 1 && row_num <= board_y_size
+        } else {
+            false
+        }
+    }
+
+    /// Returns the last valid column letter for a given board size
+    fn column_letter_for_size(board_size: u8) -> char {
+        // A=1, B=2, ..., H=8, J=9, K=10, ...
+        if board_size <= 8 {
+            (b'A' + board_size - 1) as char
+        } else {
+            // Skip 'I' after H
+            (b'A' + board_size) as char
+        }
+    }
+
     async fn wait_for_response(&self, id: &str, timeout_secs: u64) -> Result<AnalysisResult> {
         let (tx, rx) = oneshot::channel();
 
@@ -284,6 +334,19 @@ impl AnalysisEngine {
             .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+        // Validate moves for the given board size
+        for mv in &request.moves {
+            if !Self::is_valid_move(mv, request.board_x_size, request.board_y_size) {
+                warn!(
+                    "Invalid move '{}' for {}x{} board (valid columns: A-{}, skipping I)",
+                    mv,
+                    request.board_x_size,
+                    request.board_y_size,
+                    Self::column_letter_for_size(request.board_x_size)
+                );
+            }
+        }
+
         // Convert moves to KataGo format: [["b", "D4"], ["w", "Q16"], ...]
         // Note: KataGo requires lowercase b/w (confirmed by Python implementation and testing)
         let mut katago_moves = Vec::new();
@@ -324,6 +387,17 @@ impl AnalysisEngine {
         let result = self
             .wait_for_response(&request_id, self.config.move_timeout_secs)
             .await?;
+
+        // Warn if KataGo returned empty move infos (might indicate invalid position/moves)
+        if result.move_infos.is_empty() {
+            warn!(
+                "KataGo returned empty moveInfos for request {}: board={}x{}, moves={:?}",
+                request_id, request.board_x_size, request.board_y_size, request.moves
+            );
+            if result.root_info.is_none() {
+                warn!("No rootInfo either - the position may be invalid or moves may be illegal");
+            }
+        }
 
         // Convert KataGo response to our API format
         let move_infos = result
@@ -458,5 +532,50 @@ impl Drop for AnalysisEngine {
             info!("Terminating KataGo analysis process");
             let _ = process.kill();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_move_validation_9x9_board() {
+        // Valid moves on 9x9 board
+        assert!(AnalysisEngine::is_valid_move("A1", 9, 9));
+        assert!(AnalysisEngine::is_valid_move("D4", 9, 9));
+        assert!(AnalysisEngine::is_valid_move("J9", 9, 9)); // J is the 9th column (I is skipped)
+        assert!(AnalysisEngine::is_valid_move("H5", 9, 9));
+        assert!(AnalysisEngine::is_valid_move("pass", 9, 9));
+        assert!(AnalysisEngine::is_valid_move("PASS", 9, 9));
+
+        // Invalid moves on 9x9 board
+        assert!(!AnalysisEngine::is_valid_move("R4", 9, 9)); // R is column 17 (skipping I)
+        assert!(!AnalysisEngine::is_valid_move("K1", 9, 9)); // K would be column 10
+        assert!(!AnalysisEngine::is_valid_move("A10", 9, 9)); // Row 10 doesn't exist on 9x9
+        assert!(!AnalysisEngine::is_valid_move("I5", 9, 9)); // I is never a valid column
+        assert!(!AnalysisEngine::is_valid_move("A0", 9, 9)); // Row 0 doesn't exist
+    }
+
+    #[test]
+    fn test_move_validation_19x19_board() {
+        // Valid moves on 19x19 board
+        assert!(AnalysisEngine::is_valid_move("A1", 19, 19));
+        assert!(AnalysisEngine::is_valid_move("D4", 19, 19));
+        assert!(AnalysisEngine::is_valid_move("R4", 19, 19)); // R is valid on 19x19
+        assert!(AnalysisEngine::is_valid_move("T19", 19, 19)); // T is the 19th column
+        assert!(AnalysisEngine::is_valid_move("Q16", 19, 19));
+
+        // Invalid moves on 19x19 board
+        assert!(!AnalysisEngine::is_valid_move("U1", 19, 19)); // U would be column 20
+        assert!(!AnalysisEngine::is_valid_move("A20", 19, 19)); // Row 20 doesn't exist
+        assert!(!AnalysisEngine::is_valid_move("I5", 19, 19)); // I is never valid
+    }
+
+    #[test]
+    fn test_column_letter_for_size() {
+        assert_eq!(AnalysisEngine::column_letter_for_size(9), 'J'); // A-H, J (skip I)
+        assert_eq!(AnalysisEngine::column_letter_for_size(19), 'T'); // A-H, J-T
+        assert_eq!(AnalysisEngine::column_letter_for_size(5), 'E');
     }
 }
