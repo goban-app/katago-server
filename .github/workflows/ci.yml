@@ -1,5 +1,22 @@
 name: CI
 
+# Continuous Integration workflow
+#
+# This workflow runs on:
+# - Pushes to main/master branches
+# - Pull requests to main/master branches
+# - Manual triggers via workflow_dispatch
+#
+# What it does:
+# - Runs Rust code quality checks (check, test, fmt, clippy)
+# - Builds all Docker image variants (base, cpu, minimal) for verification
+# - Runs smoke tests on the CPU variant
+#
+# Important: This workflow does NOT push Docker images to GHCR
+# Docker images are only pushed via the Release workflow when a version tag is pushed
+#
+# This ensures GHCR only contains released versions, not every CI build
+
 on:
   push:
     branches: [ main, master ]

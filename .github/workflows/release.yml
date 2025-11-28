@@ -1,5 +1,23 @@
 name: Release
 
+# Tag-based release workflow
+#
+# This workflow is triggered when you push a version tag (e.g., v0.4.0) and performs:
+# 1. Builds and pushes Docker images with the tag version (e.g., 0.4.0, 0.4.0-cpu, etc.)
+# 2. Updates Chart.yaml to match the tag version (in-memory, not committed)
+# 3. Packages and releases the Helm chart with the same version
+# 4. Creates a GitHub release with documentation
+#
+# Best practices:
+# - Tag must follow semantic versioning (X.Y.Z)
+# - Chart.yaml version in the repo can be any value (it gets overwritten during release)
+# - Docker images and Helm chart versions are always synchronized via the git tag
+# - Only tagged releases push Docker images to GHCR (CI builds do not)
+#
+# To create a release:
+#   git tag v0.4.0
+#   git push origin v0.4.0
+
 on:
   push:
     tags:
@@ -111,7 +129,18 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Validate semantic versioning format
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$'; then
+            echo "Error: Tag '$VERSION' is not valid semantic versioning format"
+            echo "Expected format: X.Y.Z or X.Y.Z-prerelease or X.Y.Z+build"
+            exit 1
+          fi
+
+          echo "✓ Valid version: $VERSION"
 
       - name: Update Chart.yaml with tag version
         run: |
@@ -133,10 +162,27 @@ jobs:
         with:
           version: 'v3.14.0'
 
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.7.0
+      - name: Install chart-releaser
+        run: |
+          wget https://github.com/helm/chart-releaser/releases/download/v1.6.1/chart-releaser_1.6.1_linux_amd64.tar.gz
+          tar -xzf chart-releaser_1.6.1_linux_amd64.tar.gz
+          sudo mv cr /usr/local/bin/cr
+          cr version
+
+      - name: Package and release Helm chart
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          CR_OWNER: "${{ github.repository_owner }}"
+          CR_GIT_REPO: "${{ github.event.repository.name }}"
+        run: |
+          # Package the chart
+          helm package charts/katago-server -d .cr-release-packages
+
+          # Upload the chart to GitHub releases
+          cr upload --skip-existing
+
+          # Update the index
+          cr index --push
 
   # ===========================================================================
   # Create GitHub Release
@@ -153,12 +199,6 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
-      - name: Extract chart version
-        id: chart
-        run: |
-          CHART_VERSION=$(grep '^version:' charts/katago-server/Chart.yaml | awk '{print $2}')
-          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -169,9 +209,11 @@ jobs:
 
             This release includes the following Docker images:
 
-            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}` (CPU variant)
+            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}` (CPU variant - default)
             - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}-minimal` (Minimal variant - BYO KataGo)
-            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}-base` (Base variant)
+            - `ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}-base` (Base variant - binary only)
+
+            All images are available for `linux/amd64` and `linux/arm64` platforms.
 
             ## Helm Chart
 
@@ -180,7 +222,7 @@ jobs:
             ```bash
             helm repo add katago-server https://stubbi.github.io/katago-server
             helm repo update
-            helm install my-katago katago-server/katago-server --version ${{ steps.chart.outputs.version }}
+            helm install my-katago katago-server/katago-server --version ${{ steps.version.outputs.version }}
             ```
 
             Or use the Docker images directly:
@@ -189,3 +231,7 @@ jobs:
             docker pull ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}
             docker run -p 2718:2718 ghcr.io/stubbi/katago-server:${{ steps.version.outputs.version }}
             ```
+
+            ## What's Changed
+
+            See the auto-generated release notes below for detailed changes.
