@@ -136,10 +136,12 @@ jobs:
         with:
           images: ${{ steps.image.outputs.name }}
           flavor: |
-            suffix=${{ matrix.variant == 'base' && '' || format('-{0}', matrix.variant) }},onlatest=true
+            suffix=${{ matrix.variant == 'cpu' && '' || format('-{0}', matrix.variant) }},onlatest=true
           tags: |
             type=raw,value=${{ needs.detect-version-change.outputs.new_version }}
             type=raw,value=latest
+            type=raw,value=${{ needs.detect-version-change.outputs.new_version }}-cpu,enable=${{ matrix.variant == 'cpu' }}
+            type=raw,value=latest-cpu,enable=${{ matrix.variant == 'cpu' }}
           labels: |
             org.opencontainers.image.title=KataGo Server (${{ matrix.variant }})
             org.opencontainers.image.description=KataGo Server - ${{ matrix.variant }} variant
@@ -256,11 +258,14 @@ jobs:
 
             This release includes the following Docker images:
 
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}` (CPU variant - default)
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-minimal` (Minimal variant - BYO KataGo)
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-base` (Base variant - binary only)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}` or `:latest` (CPU variant - **default**)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-cpu` or `:latest-cpu` (CPU variant - explicit tag)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-minimal` or `:latest-minimal` (Minimal variant - BYO KataGo)
+            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-base` or `:latest-base` (Base variant - binary only)
 
             All images are available for `linux/amd64` and `linux/arm64` platforms.
+
+            **Note:** The default image (without suffix) points to the CPU variant. Both `:${{ needs.detect-version-change.outputs.new_version }}` and `:${{ needs.detect-version-change.outputs.new_version }}-cpu` reference the same CPU image.
 
             ## Helm Chart
 
