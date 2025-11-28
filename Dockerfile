@@ -169,6 +169,9 @@ COPY docker-setup.sh /app/
 # Download model and configure
 RUN chmod +x docker-setup.sh && ./docker-setup.sh
 
+# Create log directory with correct ownership for non-root user
+RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
+
 # ------------------------------------------------------------------------------
 # Stage: gpu
 # GPU variant with CUDA-enabled KataGo binary and model
