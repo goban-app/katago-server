@@ -52,28 +52,37 @@ impl Config {
         Ok(config)
     }
 
-    pub fn from_env() -> anyhow::Result<Self> {
-        let mut config = Config::default();
-
+    /// Apply environment variable overrides to the config.
+    /// Environment variables take precedence over file/default values.
+    pub fn apply_env_overrides(&mut self) {
         if let Ok(host) = std::env::var("KATAGO_SERVER_HOST") {
-            config.server.host = host;
+            self.server.host = host;
         }
         if let Ok(port) = std::env::var("KATAGO_SERVER_PORT") {
-            config.server.port = port.parse()?;
+            if let Ok(p) = port.parse() {
+                self.server.port = p;
+            }
         }
         if let Ok(path) = std::env::var("KATAGO_KATAGO_PATH") {
-            config.katago.katago_path = path;
+            self.katago.katago_path = path;
         }
         if let Ok(path) = std::env::var("KATAGO_MODEL_PATH") {
-            config.katago.model_path = path;
+            self.katago.model_path = path;
         }
         if let Ok(path) = std::env::var("KATAGO_CONFIG_PATH") {
-            config.katago.config_path = path;
+            self.katago.config_path = path;
         }
         if let Ok(timeout) = std::env::var("KATAGO_MOVE_TIMEOUT_SECS") {
-            config.katago.move_timeout_secs = timeout.parse()?;
+            if let Ok(t) = timeout.parse() {
+                self.katago.move_timeout_secs = t;
+            }
         }
+    }
 
+    #[allow(dead_code)] // Used in tests and for standalone env-only config loading
+    pub fn from_env() -> anyhow::Result<Self> {
+        let mut config = Config::default();
+        config.apply_env_overrides();
         Ok(config)
     }
 }

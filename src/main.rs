@@ -26,13 +26,13 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Load configuration
-    let config = Config::from_file("config.toml")
-        .or_else(|_| Config::from_env())
-        .unwrap_or_else(|_| {
-            info!("Using default configuration");
-            Config::default()
-        });
+    // Load configuration: file -> defaults -> env overrides
+    // Environment variables always take precedence
+    let mut config = Config::from_file("config.toml").unwrap_or_else(|_| {
+        info!("No config.toml found, using defaults");
+        Config::default()
+    });
+    config.apply_env_overrides();
 
     info!("Starting KataGo server with config: {:?}", config);
 
