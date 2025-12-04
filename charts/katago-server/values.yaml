@@ -108,10 +108,10 @@ startupProbe:
   httpGet:
     path: /api/v1/health
     port: http
-  initialDelaySeconds: 10
-  periodSeconds: 5
-  timeoutSeconds: 3
-  failureThreshold: 12
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
 
 autoscaling:
   enabled: false
