@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::thread;
 use std::time::Duration;
@@ -94,30 +95,89 @@ struct KatagoRootInfo {
     raw_st_score_error: Option<f32>,
 }
 
+/// Keepalive interval in seconds - send periodic pings to keep KataGo alive
+const KEEPALIVE_INTERVAL_SECS: u64 = 30;
+
 pub struct AnalysisEngine {
     config: KatagoConfig,
     process: Arc<StdMutex<Option<Child>>>,
     stdin: Arc<StdMutex<Option<ChildStdin>>>,
     pending_requests: Arc<StdMutex<HashMap<String, oneshot::Sender<String>>>>,
+    /// Flag indicating if KataGo process is alive
+    process_alive: Arc<AtomicBool>,
 }
 
 impl AnalysisEngine {
     pub fn new(config: KatagoConfig) -> Result<Self> {
         let pending_requests = Arc::new(StdMutex::new(HashMap::new()));
+        let process_alive = Arc::new(AtomicBool::new(false));
 
         let mut engine = Self {
             config: config.clone(),
             process: Arc::new(StdMutex::new(None)),
             stdin: Arc::new(StdMutex::new(None)),
             pending_requests: pending_requests.clone(),
+            process_alive: process_alive.clone(),
         };
 
-        engine.start_process(pending_requests)?;
+        engine.start_process(pending_requests.clone())?;
 
         // Wait a bit for initialization
         thread::sleep(Duration::from_millis(500));
 
+        // Start keepalive thread to prevent KataGo from exiting due to idle timeout
+        let stdin_clone = engine.stdin.clone();
+        let alive_clone = process_alive.clone();
+        thread::spawn(move || {
+            Self::keepalive_loop(stdin_clone, alive_clone);
+        });
+
         Ok(engine)
+    }
+
+    /// Keepalive loop that sends periodic query_version commands to keep KataGo alive
+    fn keepalive_loop(
+        stdin: Arc<StdMutex<Option<ChildStdin>>>,
+        process_alive: Arc<AtomicBool>,
+    ) {
+        loop {
+            thread::sleep(Duration::from_secs(KEEPALIVE_INTERVAL_SECS));
+
+            if !process_alive.load(Ordering::SeqCst) {
+                debug!("KataGo process not alive, skipping keepalive ping");
+                continue;
+            }
+
+            // Send a lightweight query_version command as keepalive
+            let ping_id = format!("keepalive-{}", uuid::Uuid::new_v4());
+            let ping = serde_json::json!({
+                "id": ping_id,
+                "action": "query_version"
+            });
+
+            let json = match serde_json::to_string(&ping) {
+                Ok(j) => j,
+                Err(e) => {
+                    error!("Failed to serialize keepalive ping: {}", e);
+                    continue;
+                }
+            };
+
+            let mut stdin_guard = stdin.lock().unwrap();
+            if let Some(ref mut stdin) = *stdin_guard {
+                if let Err(e) = writeln!(stdin, "{}", json) {
+                    warn!("Failed to send keepalive ping: {}", e);
+                    process_alive.store(false, Ordering::SeqCst);
+                } else if let Err(e) = stdin.flush() {
+                    warn!("Failed to flush keepalive ping: {}", e);
+                    process_alive.store(false, Ordering::SeqCst);
+                } else {
+                    debug!("Sent keepalive ping to KataGo");
+                }
+            } else {
+                debug!("No stdin available for keepalive ping");
+            }
+        }
     }
 
     fn start_process(
@@ -155,6 +215,10 @@ impl AnalysisEngine {
         *self.stdin.lock().unwrap() = Some(stdin);
         *self.process.lock().unwrap() = Some(cmd);
 
+        // Mark process as alive
+        self.process_alive.store(true, Ordering::SeqCst);
+        let process_alive_clone = self.process_alive.clone();
+
         // Spawn stderr reader thread
         thread::spawn(move || {
             let reader = BufReader::new(stderr);
@@ -181,6 +245,8 @@ impl AnalysisEngine {
                 match reader.read_line(&mut line) {
                     Ok(0) => {
                         info!("KataGo analysis stdout closed (EOF)");
+                        // Mark process as dead
+                        process_alive_clone.store(false, Ordering::SeqCst);
                         break;
                     }
                     Ok(_) => {
@@ -190,6 +256,11 @@ impl AnalysisEngine {
                         // Parse ID from response to route it
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) {
                             if let Some(id) = value.get("id").and_then(|id| id.as_str()) {
+                                // Skip keepalive pings
+                                if id.starts_with("keepalive-") {
+                                    debug!("Received keepalive response");
+                                    continue;
+                                }
                                 let mut requests = pending_requests.lock().unwrap();
                                 if let Some(sender) = requests.remove(id) {
                                     if sender.send(trimmed.to_string()).is_err() {
@@ -221,6 +292,11 @@ impl AnalysisEngine {
     }
 
     fn send_query(&self, query: &AnalysisQuery) -> Result<()> {
+        // Check if process is alive before sending
+        if !self.process_alive.load(Ordering::SeqCst) {
+            return Err(KatagoError::ProcessDied);
+        }
+
         let json = serde_json::to_string(query)?;
         debug!("Sending analysis query: {}", json);
 
@@ -231,9 +307,18 @@ impl AnalysisEngine {
         debug!("Written query to stdin, flushing...");
         match stdin.flush() {
             Ok(_) => debug!("Stdin flushed successfully"),
-            Err(e) => error!("Failed to flush stdin: {}", e),
+            Err(e) => {
+                error!("Failed to flush stdin: {}", e);
+                self.process_alive.store(false, Ordering::SeqCst);
+                return Err(KatagoError::ProcessDied);
+            }
         }
         Ok(())
+    }
+
+    /// Check if KataGo process is running
+    pub fn is_alive(&self) -> bool {
+        self.process_alive.load(Ordering::SeqCst)
     }
 
     /// Validates if a move coordinate is valid for the given board size
