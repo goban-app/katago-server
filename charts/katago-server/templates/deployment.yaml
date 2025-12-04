@@ -90,6 +90,10 @@ spec:
           value: {{ .Values.config.logLevel | quote }}
         - name: KATAGO_MOVE_TIMEOUT_SECS
           value: {{ .Values.config.katago.moveTimeoutSecs | quote }}
+        {{- if .Values.config.customModel.enabled }}
+        - name: KATAGO_MODEL_PATH
+          value: /app/models/{{ .Values.config.customModel.filename }}
+        {{- end }}
         {{- if .Values.config.customConfig }}
         - name: KATAGO_SERVER__CONFIG_PATH
           value: /config/config.toml
