@@ -136,10 +136,7 @@ impl AnalysisEngine {
     }
 
     /// Keepalive loop that sends periodic query_version commands to keep KataGo alive
-    fn keepalive_loop(
-        stdin: Arc<StdMutex<Option<ChildStdin>>>,
-        process_alive: Arc<AtomicBool>,
-    ) {
+    fn keepalive_loop(stdin: Arc<StdMutex<Option<ChildStdin>>>, process_alive: Arc<AtomicBool>) {
         loop {
             thread::sleep(Duration::from_secs(KEEPALIVE_INTERVAL_SECS));
 
@@ -317,6 +314,7 @@ impl AnalysisEngine {
     }
 
     /// Check if KataGo process is running
+    #[allow(dead_code)]
     pub fn is_alive(&self) -> bool {
         self.process_alive.load(Ordering::SeqCst)
     }
