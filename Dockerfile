@@ -89,8 +89,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /build
 
-# Clone specific version
-RUN git clone --depth 1 -b v1.14.1 https://github.com/lightvector/KataGo.git
+# Clone specific version (v1.15.0 required for human-style model support)
+RUN git clone --depth 1 -b v1.15.0 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 
@@ -131,8 +131,8 @@ RUN wget -q https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/lin
 
 WORKDIR /build
 
-# Clone specific version
-RUN git clone --depth 1 -b v1.14.1 https://github.com/lightvector/KataGo.git
+# Clone specific version (v1.15.0 required for human-style model support)
+RUN git clone --depth 1 -b v1.15.0 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 
