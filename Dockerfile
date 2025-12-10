@@ -195,6 +195,10 @@ RUN set -ex; \
     apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
     rm -rf /var/lib/apt/lists/*
 
+# Copy cuDNN libraries from builder (required at runtime)
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
+RUN ldconfig
+
 # Copy binaries
 COPY --from=rust-builder /app/target/release/katago-server /app/
 COPY --from=katago-gpu-builder /build/KataGo/cpp/katago /app/katago
