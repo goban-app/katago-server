@@ -107,8 +107,9 @@ RUN ARCH=$(uname -m) && \
 # ------------------------------------------------------------------------------
 # Stage: katago-gpu-builder
 # Builds KataGo with CUDA backend
+# Using CUDA 11.8 for broader driver compatibility (requires driver >= 450.80.02)
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:12.2.0-devel-ubuntu22.04 AS katago-gpu-builder
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 AS katago-gpu-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -121,13 +122,13 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install cuDNN 8.9.7 for CUDA 12.2
-RUN wget -q https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz \
-    && tar -xf cudnn-linux-x86_64-8.9.7.29_cuda12-archive.tar.xz \
-    && cp cudnn-linux-x86_64-8.9.7.29_cuda12-archive/include/* /usr/local/cuda/include/ \
-    && cp cudnn-linux-x86_64-8.9.7.29_cuda12-archive/lib/* /usr/local/cuda/lib64/ \
+# Install cuDNN 8.9.7 for CUDA 11.x
+RUN wget -q https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda11-archive.tar.xz \
+    && tar -xf cudnn-linux-x86_64-8.9.7.29_cuda11-archive.tar.xz \
+    && cp cudnn-linux-x86_64-8.9.7.29_cuda11-archive/include/* /usr/local/cuda/include/ \
+    && cp cudnn-linux-x86_64-8.9.7.29_cuda11-archive/lib/* /usr/local/cuda/lib64/ \
     && ldconfig \
-    && rm -rf cudnn-linux-x86_64-8.9.7.29_cuda12-archive*
+    && rm -rf cudnn-linux-x86_64-8.9.7.29_cuda11-archive*
 
 WORKDIR /build
 
@@ -175,8 +176,9 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # ------------------------------------------------------------------------------
 # Stage: gpu
 # GPU variant with CUDA-enabled KataGo binary and model
+# Using CUDA 11.8 runtime for broader driver compatibility
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:12.2.0-base-ubuntu22.04 AS gpu
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS gpu
 
 ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
