@@ -97,9 +97,9 @@ WORKDIR /build/KataGo/cpp
 # Build for CPU (Eigen), AVX2 only for amd64
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
-        cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1; \
+    cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=1; \
     else \
-        cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=0; \
+    cmake . -DUSE_BACKEND=EIGEN -DUSE_AVX2=0; \
     fi && \
     make -j"$(nproc)" && \
     strip katago
@@ -156,7 +156,7 @@ RUN set -ex; \
     apt-get update; \
     if apt-get install -y --no-install-recommends libzip5; then :; \
     else apt-get install -y --no-install-recommends libzip4; \
-        ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
     fi; \
     rm -rf /var/lib/apt/lists/*
 
@@ -177,8 +177,9 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # Stage: gpu
 # GPU variant with CUDA-enabled KataGo binary and model
 # Using CUDA 11.8 runtime for broader driver compatibility
+# Note: Using 'runtime' variant (not 'base') to include cuBLAS and other libs
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS gpu
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS gpu
 
 ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
@@ -190,7 +191,7 @@ RUN set -ex; \
     apt-get update; \
     if apt-get install -y --no-install-recommends libzip5; then :; \
     else apt-get install -y --no-install-recommends libzip4; \
-        ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
     fi; \
     apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
     rm -rf /var/lib/apt/lists/*
