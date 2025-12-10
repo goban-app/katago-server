@@ -9,7 +9,7 @@ image:
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
-  # Image variant: "" (cpu - default), "-cpu" (explicit), "-minimal" (BYO KataGo), "-base" (binary only)
+  # Image variant: "" (cpu - default), "-cpu" (explicit), "-gpu" (CUDA GPU), "-minimal" (BYO KataGo), "-base" (binary only)
   variant: ""
 
 imagePullSecrets: []

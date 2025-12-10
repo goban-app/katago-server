@@ -199,14 +199,19 @@ COPY --from=katago-gpu-builder /build/KataGo/cpp/katago /app/katago
 
 # Copy configurations
 COPY config.toml.example /app/config.toml.example
-COPY gtp_config.cfg.gpu /app/gtp_config.cfg
+COPY analysis_config.cfg.gpu /app/analysis_config.cfg
 COPY docker-setup.sh /app/
 
 # Download model and configure
 RUN chmod +x docker-setup.sh && ./docker-setup.sh
 
+# Create log directory with correct ownership for non-root user
+RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
+
 EXPOSE 2718
 ENV RUST_LOG=debug
+# Bind to IPv6 wildcard to support both IPv4 and IPv6 (required for Salad Cloud)
+ENV KATAGO_SERVER_HOST="::"
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:2718/api/v1/health || exit 1
