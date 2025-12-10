@@ -1,5 +1,6 @@
 # KataGo Analysis Engine Configuration - GPU optimized (CUDA)
 # For use with "katago analysis" command
+# Optimized for consumer-grade GPUs (e.g., Salad.com: RTX 3060/4000 with 8-12GB VRAM)
 
 # Logging
 logDir = analysis_logs
@@ -10,18 +11,19 @@ logAllResponses = false
 # Analysis behavior
 reportAnalysisWinratesAs = SIDETOMOVE
 
-# Threading configuration for GPU
-# GPU can handle more parallel analysis with higher batch sizes
-numAnalysisThreads = 4
-numSearchThreadsPerAnalysisThread = 4
+# Threading configuration for GPU (conservative for stability)
+# Single analysis thread is more stable and prevents resource exhaustion
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 2
 
-# Neural network batching (GPU optimized - larger batches)
-nnMaxBatchSize = 64
+# Neural network batching (GPU optimized - conservative batch size)
+# Batch size of 16 works reliably on GPUs with 8GB+ VRAM
+nnMaxBatchSize = 16
 numNNServerThreadsPerModel = 1
 
 # Search behavior
 # conservativePass = true
 # ignorePreRootHistory = true
 
-# Performance tuning for GPU (larger cache)
-nnCacheSizePowerOfTwo = 23  # ~8M cache entries
+# Performance tuning for GPU (conservative cache for 8-12GB GPUs)
+nnCacheSizePowerOfTwo = 21  # ~2M cache entries (~128MB)
