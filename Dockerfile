@@ -176,10 +176,10 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # ------------------------------------------------------------------------------
 # Stage: gpu
 # GPU variant with CUDA-enabled KataGo binary and model
-# Using CUDA 11.8 runtime for broader driver compatibility
-# Note: Using 'runtime' variant (not 'base') to include cuBLAS and other libs
+# Using CUDA 11.8 base for smaller image size, copying only required libs
+# Required libs: cuBLAS (libcublas, libcublasLt) and cuDNN
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04 AS gpu
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS gpu
 
 ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
@@ -196,7 +196,11 @@ RUN set -ex; \
     apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
     rm -rf /var/lib/apt/lists/*
 
-# Copy cuDNN libraries from builder (required at runtime)
+# Copy only required CUDA libraries from builder (smaller than using runtime image)
+# - cuBLAS: required for matrix operations
+# - cuDNN: required for neural network inference
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublas* /usr/local/cuda/lib64/
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublasLt* /usr/local/cuda/lib64/
 COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
 RUN ldconfig
 

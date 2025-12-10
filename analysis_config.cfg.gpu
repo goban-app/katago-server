@@ -1,6 +1,6 @@
 # KataGo Analysis Engine Configuration - GPU optimized (CUDA)
 # For use with "katago analysis" command
-# Optimized for consumer-grade GPUs (e.g., Salad.com: RTX 3060/4000 with 8-12GB VRAM)
+# Optimized for RTX 3080 (10GB VRAM) on Salad Cloud
 
 # Logging
 logDir = analysis_logs
@@ -11,19 +11,19 @@ logAllResponses = false
 # Analysis behavior
 reportAnalysisWinratesAs = SIDETOMOVE
 
-# Threading configuration for GPU (conservative for stability)
-# Single analysis thread is more stable and prevents resource exhaustion
-numAnalysisThreads = 1
-numSearchThreadsPerAnalysisThread = 2
+# Threading configuration for GPU (optimized for RTX 3080)
+# 2 analysis threads for concurrent request handling
+numAnalysisThreads = 2
+numSearchThreadsPerAnalysisThread = 4
 
-# Neural network batching (GPU optimized - conservative batch size)
-# Batch size of 16 works reliably on GPUs with 8GB+ VRAM
-nnMaxBatchSize = 16
-numNNServerThreadsPerModel = 1
+# Neural network batching (RTX 3080 optimized)
+# Batch size of 32 balances throughput and latency on 10GB GPUs
+nnMaxBatchSize = 32
+numNNServerThreadsPerModel = 2
 
-# Search behavior
-# conservativePass = true
-# ignorePreRootHistory = true
+# Performance tuning for GPU (RTX 3080 with 10GB VRAM)
+nnCacheSizePowerOfTwo = 22  # ~4M cache entries (~256MB)
 
-# Performance tuning for GPU (conservative cache for 8-12GB GPUs)
-nnCacheSizePowerOfTwo = 21  # ~2M cache entries (~128MB)
+# Default max visits (can be overridden per-request)
+# 1000 visits provides good analysis quality with ~500ms response time
+maxVisits = 1000
