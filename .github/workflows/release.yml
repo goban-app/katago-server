@@ -106,6 +106,8 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - variant: cpu
             platforms: linux/amd64,linux/arm64
+          - variant: gpu
+            platforms: linux/amd64
           - variant: minimal
             platforms: linux/amd64,linux/arm64
 
@@ -258,12 +260,14 @@ jobs:
 
             This release includes the following Docker images:
 
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}` or `:latest` (CPU variant - **default**)
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-cpu` or `:latest-cpu` (CPU variant - explicit tag)
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-minimal` or `:latest-minimal` (Minimal variant - BYO KataGo)
-            - `ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}-base` or `:latest-base` (Base variant - binary only)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}` or `:latest` (CPU variant - **default**)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-cpu` or `:latest-cpu` (CPU variant - explicit tag)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-gpu` or `:latest-gpu` (GPU/CUDA variant - for NVIDIA GPUs)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-minimal` or `:latest-minimal` (Minimal variant - BYO KataGo)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-base` or `:latest-base` (Base variant - binary only)
 
-            All images are available for `linux/amd64` and `linux/arm64` platforms.
+            CPU, minimal, and base images are available for `linux/amd64` and `linux/arm64` platforms.
+            GPU image is available for `linux/amd64` only (requires NVIDIA CUDA).
 
             **Note:** The default image (without suffix) points to the CPU variant. Both `:${{ needs.detect-version-change.outputs.new_version }}` and `:${{ needs.detect-version-change.outputs.new_version }}-cpu` reference the same CPU image.
 
@@ -272,7 +276,7 @@ jobs:
             Install the Helm chart for this release:
 
             ```bash
-            helm repo add katago-server https://stubbi.github.io/katago-server
+            helm repo add katago-server https://goban-app.github.io/katago-server
             helm repo update
             helm install my-katago katago-server/katago-server --version ${{ needs.detect-version-change.outputs.new_version }}
             ```
@@ -280,8 +284,13 @@ jobs:
             Or use the Docker images directly:
 
             ```bash
-            docker pull ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}
-            docker run -p 2718:2718 ghcr.io/stubbi/katago-server:${{ needs.detect-version-change.outputs.new_version }}
+            # CPU variant
+            docker pull ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}
+            docker run -p 2718:2718 ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}
+
+            # GPU variant (requires NVIDIA Container Toolkit)
+            docker pull ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-gpu
+            docker run --gpus all -p 2718:2718 ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-gpu
             ```
 
             ## What's Changed

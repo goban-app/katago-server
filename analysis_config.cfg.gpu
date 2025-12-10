@@ -1,0 +1,27 @@
+# KataGo Analysis Engine Configuration - GPU optimized (CUDA)
+# For use with "katago analysis" command
+
+# Logging
+logDir = analysis_logs
+logSearchInfo = false
+logAllRequests = false
+logAllResponses = false
+
+# Analysis behavior
+reportAnalysisWinratesAs = SIDETOMOVE
+
+# Threading configuration for GPU
+# GPU can handle more parallel analysis with higher batch sizes
+numAnalysisThreads = 4
+numSearchThreadsPerAnalysisThread = 4
+
+# Neural network batching (GPU optimized - larger batches)
+nnMaxBatchSize = 64
+numNNServerThreadsPerModel = 1
+
+# Search behavior
+# conservativePass = true
+# ignorePreRootHistory = true
+
+# Performance tuning for GPU (larger cache)
+nnCacheSizePowerOfTwo = 23  # ~8M cache entries
