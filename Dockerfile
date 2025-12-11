@@ -89,8 +89,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /build
 
-# Clone specific version (v1.15.0 required for human-style model support)
-RUN git clone --depth 1 -b v1.15.0 https://github.com/lightvector/KataGo.git
+# Clone specific version (v1.16.4 for CUDA 12 support and human-style model support)
+RUN git clone --depth 1 -b v1.16.4 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 
@@ -107,9 +107,10 @@ RUN ARCH=$(uname -m) && \
 # ------------------------------------------------------------------------------
 # Stage: katago-gpu-builder
 # Builds KataGo with CUDA backend
-# Using CUDA 11.8 for broader driver compatibility (requires driver >= 450.80.02)
+# Using CUDA 12.4 devel for building (runtime uses smaller cudnn-runtime image)
+# CUDA 12.4 requires driver >= 525.60.13 (RTX 3080 compatible)
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:11.8.0-devel-ubuntu22.04 AS katago-gpu-builder
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04 AS katago-gpu-builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -119,26 +120,17 @@ RUN apt-get update && apt-get install -y \
     cmake \
     libzip-dev \
     libssl-dev \
-    wget \
     && rm -rf /var/lib/apt/lists/*
-
-# Install cuDNN 8.9.7 for CUDA 11.x
-RUN wget -q https://developer.download.nvidia.com/compute/cudnn/redist/cudnn/linux-x86_64/cudnn-linux-x86_64-8.9.7.29_cuda11-archive.tar.xz \
-    && tar -xf cudnn-linux-x86_64-8.9.7.29_cuda11-archive.tar.xz \
-    && cp cudnn-linux-x86_64-8.9.7.29_cuda11-archive/include/* /usr/local/cuda/include/ \
-    && cp cudnn-linux-x86_64-8.9.7.29_cuda11-archive/lib/* /usr/local/cuda/lib64/ \
-    && ldconfig \
-    && rm -rf cudnn-linux-x86_64-8.9.7.29_cuda11-archive*
 
 WORKDIR /build
 
-# Clone specific version (v1.15.0 required for human-style model support)
-RUN git clone --depth 1 -b v1.15.0 https://github.com/lightvector/KataGo.git
+# Clone specific version (v1.16.4 for CUDA 12 support and human-style model support)
+RUN git clone --depth 1 -b v1.16.4 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 
-# Build for CUDA
-RUN cmake . -DUSE_BACKEND=CUDA -DCUDNN_INCLUDE_DIR=/usr/local/cuda/include \
+# Build for CUDA (cuDNN headers already included in devel image)
+RUN cmake . -DUSE_BACKEND=CUDA \
     && make -j"$(nproc)" \
     && strip katago
 
@@ -176,10 +168,10 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # ------------------------------------------------------------------------------
 # Stage: gpu
 # GPU variant with CUDA-enabled KataGo binary and model
-# Using CUDA 11.8 base for smaller image size, copying only required libs
-# Required libs: cuBLAS (libcublas, libcublasLt) and cuDNN
+# Using CUDA 12.4 cudnn-runtime for smaller image (~2GB vs ~5.5GB with lib copying)
+# CUDA 12.4 requires driver >= 525.60.13 (RTX 3080 compatible)
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS gpu
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS gpu
 
 ARG KATAGO_MODEL=kata1-b28c512nbt-s12043015936-d5616446734.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
@@ -187,22 +179,12 @@ ENV KATAGO_MODEL=${KATAGO_MODEL}
 WORKDIR /app
 
 # Install runtime dependencies
-RUN set -ex; \
-    apt-get update; \
-    if apt-get install -y --no-install-recommends libzip5; then :; \
-    else apt-get install -y --no-install-recommends libzip4; \
-    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
-    fi; \
-    apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy only required CUDA libraries from builder (smaller than using runtime image)
-# - cuBLAS: required for matrix operations
-# - cuDNN: required for neural network inference
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublas* /usr/local/cuda/lib64/
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublasLt* /usr/local/cuda/lib64/
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
-RUN ldconfig
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libzip4 \
+    ca-certificates \
+    wget \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy binaries
 COPY --from=rust-builder /app/target/release/katago-server /app/
@@ -263,9 +245,10 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # ------------------------------------------------------------------------------
 # Stage: human-gpu
 # GPU variant with Human SL network for human-style analysis
-# Using CUDA 11.8 base for smaller image size, copying only required libs
+# Using CUDA 12.4 cudnn-runtime for smaller image (~2GB vs ~5.5GB with lib copying)
+# CUDA 12.4 requires driver >= 525.60.13 (RTX 3080 compatible)
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS human-gpu
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS human-gpu
 
 ARG KATAGO_MODEL=b18c384nbt-humanv0.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
@@ -273,22 +256,12 @@ ENV KATAGO_MODEL=${KATAGO_MODEL}
 WORKDIR /app
 
 # Install runtime dependencies
-RUN set -ex; \
-    apt-get update; \
-    if apt-get install -y --no-install-recommends libzip5; then :; \
-    else apt-get install -y --no-install-recommends libzip4; \
-    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
-    fi; \
-    apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy only required CUDA libraries from builder (smaller than using runtime image)
-# - cuBLAS: required for matrix operations
-# - cuDNN: required for neural network inference
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublas* /usr/local/cuda/lib64/
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublasLt* /usr/local/cuda/lib64/
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
-RUN ldconfig
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libzip4 \
+    ca-certificates \
+    wget \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy binaries
 COPY --from=rust-builder /app/target/release/katago-server /app/
@@ -354,9 +327,10 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # Stage: combo-gpu
 # GPU variant with both standard and human models
 # Standard model is used by default; human model available via overrideSettings
-# Using CUDA 11.8 base for smaller image size, copying only required libs
+# Using CUDA 12.4 cudnn-runtime for smaller image (~2.4GB vs ~5.5GB with lib copying)
+# CUDA 12.4 requires driver >= 525.60.13 (RTX 3080 compatible)
 # ------------------------------------------------------------------------------
-FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS combo-gpu
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04 AS combo-gpu
 
 ARG KATAGO_MODEL=kata1-b28c512nbt-s12043015936-d5616446734.bin.gz
 ARG KATAGO_HUMAN_MODEL=b18c384nbt-humanv0.bin.gz
@@ -367,22 +341,12 @@ ENV KATAGO_HUMAN_MODEL_PATH="./${KATAGO_HUMAN_MODEL}"
 WORKDIR /app
 
 # Install runtime dependencies
-RUN set -ex; \
-    apt-get update; \
-    if apt-get install -y --no-install-recommends libzip5; then :; \
-    else apt-get install -y --no-install-recommends libzip4; \
-    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
-    fi; \
-    apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy only required CUDA libraries from builder (smaller than using runtime image)
-# - cuBLAS: required for matrix operations
-# - cuDNN: required for neural network inference
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublas* /usr/local/cuda/lib64/
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublasLt* /usr/local/cuda/lib64/
-COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
-RUN ldconfig
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libzip4 \
+    ca-certificates \
+    wget \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy binaries
 COPY --from=rust-builder /app/target/release/katago-server /app/
