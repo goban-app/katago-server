@@ -1,0 +1,30 @@
+# KataGo Analysis Engine Configuration - Combo GPU (standard + human model)
+# For use with "katago analysis" command with both standard and human models
+# The standard model is used for analysis by default
+# Human model can be activated per-request via overrideSettings with humanSLProfile
+
+# Logging
+logDir = analysis_logs
+logSearchInfo = false
+logAllRequests = false
+logAllResponses = false
+
+# Analysis behavior
+reportAnalysisWinratesAs = SIDETOMOVE
+
+# Threading configuration for GPU (optimized for RTX 3080)
+# 2 analysis threads for concurrent request handling
+numAnalysisThreads = 2
+numSearchThreadsPerAnalysisThread = 4
+
+# Neural network batching (RTX 3080 optimized)
+# Batch size of 32 balances throughput and latency on 10GB GPUs
+nnMaxBatchSize = 32
+numNNServerThreadsPerModel = 2
+
+# Performance tuning for GPU (RTX 3080 with 10GB VRAM)
+nnCacheSizePowerOfTwo = 22  # ~4M cache entries (~256MB)
+
+# Default max visits (can be overridden per-request)
+# 1000 visits provides good analysis quality with ~500ms response time
+maxVisits = 1000

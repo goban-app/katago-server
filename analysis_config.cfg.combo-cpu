@@ -1,0 +1,31 @@
+# KataGo Analysis Engine Configuration - Combo CPU (standard + human model)
+# For use with "katago analysis" command with both standard and human models
+# The standard model is used for analysis by default
+# Human model can be activated per-request via overrideSettings with humanSLProfile
+
+# Logging
+logDir = analysis_logs
+logSearchInfo = false
+logAllRequests = false
+logAllResponses = false
+
+# Analysis behavior
+reportAnalysisWinratesAs = SIDETOMOVE
+
+# Threading configuration for CPU
+# numAnalysisThreads: number of positions to analyze in parallel
+# numSearchThreadsPerAnalysisThread: threads per position search
+# Total active threads = numAnalysisThreads * numSearchThreadsPerAnalysisThread
+# Conservative settings for CPU-only deployment
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
+
+# Neural network batching (CPU optimized)
+nnMaxBatchSize = 8
+numNNServerThreadsPerModel = 2
+
+# Default max visits (can be overridden per-request)
+maxVisits = 10
+
+# Performance tuning for CPU
+nnCacheSizePowerOfTwo = 20  # ~1M cache entries

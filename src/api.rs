@@ -146,6 +146,9 @@ pub struct AnalysisResponse {
     pub ownership_stdev: Option<Vec<f32>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub policy: Option<Vec<f32>>,
+    /// Human SL model policy predictions (requires human model and includePolicy=true)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_policy: Option<Vec<f32>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -162,6 +165,9 @@ pub struct MoveInfo {
     pub utility_lcb: Option<f32>,
     pub lcb: f32,
     pub prior: f32,
+    /// Human SL model prior for this move (requires human model)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_prior: Option<f32>,
     pub order: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pv: Option<Vec<String>>,
@@ -185,6 +191,13 @@ pub struct RootInfo {
     pub raw_score_mean: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_st_score_error: Option<f32>,
+    // Human SL model fields (requires human model and humanSLProfile in overrideSettings)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_winrate: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_score_mean: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_score_stdev: Option<f32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -485,6 +498,7 @@ mod tests {
                 utility_lcb: Some(0.025),
                 lcb: 0.515,
                 prior: 0.18,
+                human_prior: None,
                 order: 0,
                 pv: Some(vec!["D16".to_string(), "Q4".to_string()]),
                 pv_visits: Some(vec![142, 95]),
@@ -499,10 +513,14 @@ mod tests {
                 raw_winrate: Some(0.508),
                 raw_score_mean: Some(1.2),
                 raw_st_score_error: Some(8.5),
+                human_winrate: None,
+                human_score_mean: None,
+                human_score_stdev: None,
             }),
             ownership: None,
             ownership_stdev: None,
             policy: None,
+            human_policy: None,
         };
 
         let json = serde_json::to_string(&response).unwrap();
