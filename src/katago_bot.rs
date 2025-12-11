@@ -489,6 +489,7 @@ mod integration_tests {
             katago_path: env::var("KATAGO_PATH").unwrap_or_else(|_| "./katago".to_string()),
             model_path: env::var("KATAGO_MODEL_PATH")
                 .unwrap_or_else(|_| "./model.bin.gz".to_string()),
+            human_model_path: None,
             config_path: env::var("KATAGO_CONFIG_PATH")
                 .unwrap_or_else(|_| "./gtp_config.cfg".to_string()),
             move_timeout_secs: 20,
@@ -527,6 +528,7 @@ mod integration_tests {
         let config = KatagoConfig {
             katago_path: env::var("KATAGO_PATH").unwrap_or_else(|_| "./katago".to_string()),
             model_path: "/nonexistent/model.bin.gz".to_string(),
+            human_model_path: None,
             config_path: env::var("KATAGO_CONFIG_PATH")
                 .unwrap_or_else(|_| "./gtp_config.cfg".to_string()),
             move_timeout_secs: 5,
@@ -548,6 +550,7 @@ mod integration_tests {
         let config = KatagoConfig {
             katago_path: "/nonexistent/katago".to_string(),
             model_path: "/nonexistent/model.bin.gz".to_string(),
+            human_model_path: None,
             config_path: "/nonexistent/config.cfg".to_string(),
             move_timeout_secs: 20,
         };

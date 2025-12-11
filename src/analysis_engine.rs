@@ -58,6 +58,9 @@ struct AnalysisResult {
     ownership: Option<Vec<f32>>,
     #[serde(default)]
     policy: Option<Vec<f32>>,
+    /// Human SL model policy (when human model is loaded and includePolicy=true)
+    #[serde(default)]
+    human_policy: Option<Vec<f32>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -77,6 +80,9 @@ struct KatagoMoveInfo {
     utility_lcb: f32,
     lcb: f32,
     prior: f32,
+    /// Human SL model prior for this move (when human model is loaded)
+    #[serde(default)]
+    human_prior: Option<f32>,
     order: u32,
     #[serde(default)]
     pv: Vec<String>,
@@ -99,6 +105,13 @@ struct KatagoRootInfo {
     raw_score_mean: Option<f32>,
     #[serde(default)]
     raw_st_score_error: Option<f32>,
+    // Human SL model fields (when human model is loaded and humanSLProfile is set)
+    #[serde(default)]
+    human_winrate: Option<f32>,
+    #[serde(default)]
+    human_score_mean: Option<f32>,
+    #[serde(default)]
+    human_score_stdev: Option<f32>,
 }
 
 /// Keepalive interval in seconds - send periodic pings to keep KataGo alive
@@ -261,14 +274,23 @@ impl AnalysisEngine {
     )> {
         info!("Starting KataGo analysis engine");
         info!(
-            "Config: katago={}, model={}, config={}",
-            config.katago_path, config.model_path, config.config_path
+            "Config: katago={}, model={}, human_model={:?}, config={}",
+            config.katago_path, config.model_path, config.human_model_path, config.config_path
         );
 
-        let mut cmd = Command::new(&config.katago_path)
+        let mut command = Command::new(&config.katago_path);
+        command
             .arg("analysis")
             .arg("-model")
-            .arg(&config.model_path)
+            .arg(&config.model_path);
+
+        // Add human model if configured
+        if let Some(ref human_model) = config.human_model_path {
+            info!("Human SL model enabled: {}", human_model);
+            command.arg("-human-model").arg(human_model);
+        }
+
+        let mut cmd = command
             .arg("-config")
             .arg(&config.config_path)
             .stdin(Stdio::piped())
@@ -593,6 +615,7 @@ impl AnalysisEngine {
                 utility_lcb: Some(mi.utility_lcb),
                 lcb: mi.lcb,
                 prior: mi.prior,
+                human_prior: mi.human_prior,
                 order: mi.order,
                 pv: if mi.pv.is_empty() { None } else { Some(mi.pv) },
                 pv_visits: mi.pv_visits,
@@ -609,6 +632,9 @@ impl AnalysisEngine {
             raw_winrate: ri.raw_winrate,
             raw_score_mean: ri.raw_score_mean,
             raw_st_score_error: ri.raw_st_score_error,
+            human_winrate: ri.human_winrate,
+            human_score_mean: ri.human_score_mean,
+            human_score_stdev: ri.human_score_stdev,
         });
 
         Ok(AnalysisResponse {
@@ -620,6 +646,7 @@ impl AnalysisEngine {
             ownership: result.ownership,
             ownership_stdev: None, // Not provided by basic analysis
             policy: result.policy,
+            human_policy: result.human_policy,
         })
     }
 

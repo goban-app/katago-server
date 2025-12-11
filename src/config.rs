@@ -6,6 +6,9 @@ use std::fs;
 pub struct KatagoConfig {
     pub katago_path: String,
     pub model_path: String,
+    /// Optional path to human SL model for human-style analysis
+    /// When set, KataGo is started with -human-model flag
+    pub human_model_path: Option<String>,
     pub config_path: String,
     pub move_timeout_secs: u64,
 }
@@ -15,6 +18,7 @@ impl Default for KatagoConfig {
         Self {
             katago_path: "./katago".to_string(),
             model_path: "./model.bin.gz".to_string(),
+            human_model_path: None,
             config_path: "./analysis_config.cfg".to_string(),
             move_timeout_secs: 20,
         }
@@ -68,6 +72,9 @@ impl Config {
         }
         if let Ok(path) = std::env::var("KATAGO_MODEL_PATH") {
             self.katago.model_path = path;
+        }
+        if let Ok(path) = std::env::var("KATAGO_HUMAN_MODEL_PATH") {
+            self.katago.human_model_path = Some(path);
         }
         if let Ok(path) = std::env::var("KATAGO_CONFIG_PATH") {
             self.katago.config_path = path;
@@ -127,6 +134,7 @@ mod tests {
         let config = KatagoConfig::default();
         assert_eq!(config.katago_path, "./katago");
         assert_eq!(config.model_path, "./model.bin.gz");
+        assert!(config.human_model_path.is_none());
         assert_eq!(config.config_path, "./analysis_config.cfg");
         assert_eq!(config.move_timeout_secs, 20);
     }

@@ -316,6 +316,100 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 CMD ["./katago-server"]
 
 # ------------------------------------------------------------------------------
+# Stage: combo-cpu
+# CPU variant with both standard and human models
+# Standard model is used by default; human model available via overrideSettings
+# ------------------------------------------------------------------------------
+FROM base AS combo-cpu
+
+ARG KATAGO_MODEL=kata1-b28c512nbt-s12043015936-d5616446734.bin.gz
+ARG KATAGO_HUMAN_MODEL=b18c384nbt-humanv0.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
+ENV KATAGO_HUMAN_MODEL=${KATAGO_HUMAN_MODEL}
+ENV KATAGO_HUMAN_MODEL_PATH="./${KATAGO_HUMAN_MODEL}"
+
+# Install runtime dependencies for KataGo
+RUN set -ex; \
+    apt-get update; \
+    if apt-get install -y --no-install-recommends libzip5; then :; \
+    else apt-get install -y --no-install-recommends libzip4; \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy KataGo binary
+COPY --from=katago-cpu-builder /build/KataGo/cpp/katago /app/katago
+
+# Copy configuration
+COPY analysis_config.cfg.combo-cpu /app/analysis_config.cfg
+COPY docker-setup.sh /app/
+
+# Download both models and configure
+RUN chmod +x docker-setup.sh && ./docker-setup.sh
+
+# Create log directory with correct ownership for non-root user
+RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
+
+# ------------------------------------------------------------------------------
+# Stage: combo-gpu
+# GPU variant with both standard and human models
+# Standard model is used by default; human model available via overrideSettings
+# Using CUDA 11.8 base for smaller image size, copying only required libs
+# ------------------------------------------------------------------------------
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS combo-gpu
+
+ARG KATAGO_MODEL=kata1-b28c512nbt-s12043015936-d5616446734.bin.gz
+ARG KATAGO_HUMAN_MODEL=b18c384nbt-humanv0.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
+ENV KATAGO_HUMAN_MODEL=${KATAGO_HUMAN_MODEL}
+ENV KATAGO_HUMAN_MODEL_PATH="./${KATAGO_HUMAN_MODEL}"
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN set -ex; \
+    apt-get update; \
+    if apt-get install -y --no-install-recommends libzip5; then :; \
+    else apt-get install -y --no-install-recommends libzip4; \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
+    fi; \
+    apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy only required CUDA libraries from builder (smaller than using runtime image)
+# - cuBLAS: required for matrix operations
+# - cuDNN: required for neural network inference
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublas* /usr/local/cuda/lib64/
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublasLt* /usr/local/cuda/lib64/
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
+RUN ldconfig
+
+# Copy binaries
+COPY --from=rust-builder /app/target/release/katago-server /app/
+COPY --from=katago-gpu-builder /build/KataGo/cpp/katago /app/katago
+
+# Copy configurations
+COPY config.toml.example /app/config.toml.example
+COPY analysis_config.cfg.combo-gpu /app/analysis_config.cfg
+COPY docker-setup.sh /app/
+
+# Download both models and configure
+RUN chmod +x docker-setup.sh && ./docker-setup.sh
+
+# Create log directory with correct ownership for non-root user
+RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
+
+EXPOSE 2718
+ENV RUST_LOG=debug
+# Bind to IPv6 wildcard to support both IPv4 and IPv6 (required for Salad Cloud)
+ENV KATAGO_SERVER_HOST="::"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:2718/api/v1/health || exit 1
+
+CMD ["./katago-server"]
+
+# ------------------------------------------------------------------------------
 # Stage: minimal
 # Minimal variant - expects KataGo and model to be mounted as volumes
 # ------------------------------------------------------------------------------
