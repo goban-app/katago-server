@@ -170,11 +170,17 @@ impl AnalysisEngine {
             // Check if process is dead and needs restart
             if !process_alive.load(Ordering::SeqCst) {
                 if restart_count >= MAX_RESTART_ATTEMPTS {
-                    error!("KataGo has failed {} times, giving up on restarts", restart_count);
+                    error!(
+                        "KataGo has failed {} times, giving up on restarts",
+                        restart_count
+                    );
                     continue;
                 }
 
-                warn!("KataGo process died, attempting restart (attempt {})", restart_count + 1);
+                warn!(
+                    "KataGo process died, attempting restart (attempt {})",
+                    restart_count + 1
+                );
                 thread::sleep(Duration::from_secs(RESTART_DELAY_SECS));
 
                 // Clean up old process
@@ -247,7 +253,12 @@ impl AnalysisEngine {
     /// Spawn the KataGo process and return handles to it
     fn spawn_katago_process(
         config: &KatagoConfig,
-    ) -> Result<(Child, ChildStdin, std::process::ChildStdout, std::process::ChildStderr)> {
+    ) -> Result<(
+        Child,
+        ChildStdin,
+        std::process::ChildStdout,
+        std::process::ChildStderr,
+    )> {
         info!("Starting KataGo analysis engine");
         info!(
             "Config: katago={}, model={}, config={}",
