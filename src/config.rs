@@ -31,7 +31,7 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
+            host: "::".to_string(),
             port: 2718,
         }
     }
