@@ -89,8 +89,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /build
 
-# Clone specific version (v1.15.0 required for human-style model support)
-RUN git clone --depth 1 -b v1.15.0 https://github.com/lightvector/KataGo.git
+# Clone specific version (v1.16.4 for CUDA 12 support and human-style model support)
+RUN git clone --depth 1 -b v1.16.4 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 
@@ -124,8 +124,8 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /build
 
-# Clone specific version (v1.15.0 required for human-style model support)
-RUN git clone --depth 1 -b v1.15.0 https://github.com/lightvector/KataGo.git
+# Clone specific version (v1.16.4 for CUDA 12 support and human-style model support)
+RUN git clone --depth 1 -b v1.16.4 https://github.com/lightvector/KataGo.git
 
 WORKDIR /build/KataGo/cpp
 

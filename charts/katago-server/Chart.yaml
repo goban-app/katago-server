@@ -9,7 +9,7 @@ type: application
 version: 1.7.0
 
 # This is the version number of the application being deployed.
-# KataGo v1.15.0 required for human-style model support
+# KataGo v1.16.4 for CUDA 12 support and human-style model support
 appVersion: "1.7.0"
 
 
