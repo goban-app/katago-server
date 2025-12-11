@@ -148,7 +148,7 @@ RUN cmake . -DUSE_BACKEND=CUDA -DCUDNN_INCLUDE_DIR=/usr/local/cuda/include \
 # ------------------------------------------------------------------------------
 FROM base AS cpu
 
-ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
+ARG KATAGO_MODEL=kata1-b28c512nbt-s12043015936-d5616446734.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
 
 # Install runtime dependencies for KataGo
@@ -181,7 +181,7 @@ RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
 # ------------------------------------------------------------------------------
 FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS gpu
 
-ARG KATAGO_MODEL=kata1-b28c512nbt-s11923456768-d5584765134.bin.gz
+ARG KATAGO_MODEL=kata1-b28c512nbt-s12043015936-d5616446734.bin.gz
 ENV KATAGO_MODEL=${KATAGO_MODEL}
 
 WORKDIR /app
@@ -211,6 +211,92 @@ COPY --from=katago-gpu-builder /build/KataGo/cpp/katago /app/katago
 # Copy configurations
 COPY config.toml.example /app/config.toml.example
 COPY analysis_config.cfg.gpu /app/analysis_config.cfg
+COPY docker-setup.sh /app/
+
+# Download model and configure
+RUN chmod +x docker-setup.sh && ./docker-setup.sh
+
+# Create log directory with correct ownership for non-root user
+RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
+
+EXPOSE 2718
+ENV RUST_LOG=debug
+# Bind to IPv6 wildcard to support both IPv4 and IPv6 (required for Salad Cloud)
+ENV KATAGO_SERVER_HOST="::"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:2718/api/v1/health || exit 1
+
+CMD ["./katago-server"]
+
+# ------------------------------------------------------------------------------
+# Stage: human-cpu
+# CPU variant with Human SL network for human-style analysis
+# ------------------------------------------------------------------------------
+FROM base AS human-cpu
+
+ARG KATAGO_MODEL=b18c384nbt-humanv0.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
+
+# Install runtime dependencies for KataGo
+RUN set -ex; \
+    apt-get update; \
+    if apt-get install -y --no-install-recommends libzip5; then :; \
+    else apt-get install -y --no-install-recommends libzip4; \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
+    fi; \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy KataGo binary
+COPY --from=katago-cpu-builder /build/KataGo/cpp/katago /app/katago
+
+# Copy configuration (human-specific)
+COPY analysis_config.cfg.human-cpu /app/analysis_config.cfg
+COPY docker-setup.sh /app/
+
+# Download model and configure
+RUN chmod +x docker-setup.sh && ./docker-setup.sh
+
+# Create log directory with correct ownership for non-root user
+RUN mkdir -p /app/analysis_logs && chown 1000:1000 /app/analysis_logs
+
+# ------------------------------------------------------------------------------
+# Stage: human-gpu
+# GPU variant with Human SL network for human-style analysis
+# Using CUDA 11.8 base for smaller image size, copying only required libs
+# ------------------------------------------------------------------------------
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS human-gpu
+
+ARG KATAGO_MODEL=b18c384nbt-humanv0.bin.gz
+ENV KATAGO_MODEL=${KATAGO_MODEL}
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN set -ex; \
+    apt-get update; \
+    if apt-get install -y --no-install-recommends libzip5; then :; \
+    else apt-get install -y --no-install-recommends libzip4; \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libzip.so.4 /usr/lib/$(uname -m)-linux-gnu/libzip.so.5; \
+    fi; \
+    apt-get install -y --no-install-recommends ca-certificates wget libgomp1; \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy only required CUDA libraries from builder (smaller than using runtime image)
+# - cuBLAS: required for matrix operations
+# - cuDNN: required for neural network inference
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublas* /usr/local/cuda/lib64/
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcublasLt* /usr/local/cuda/lib64/
+COPY --from=katago-gpu-builder /usr/local/cuda/lib64/libcudnn* /usr/local/cuda/lib64/
+RUN ldconfig
+
+# Copy binaries
+COPY --from=rust-builder /app/target/release/katago-server /app/
+COPY --from=katago-gpu-builder /build/KataGo/cpp/katago /app/katago
+
+# Copy configurations (human-specific)
+COPY config.toml.example /app/config.toml.example
+COPY analysis_config.cfg.human-gpu /app/analysis_config.cfg
 COPY docker-setup.sh /app/
 
 # Download model and configure

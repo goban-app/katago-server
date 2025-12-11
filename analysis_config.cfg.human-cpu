@@ -1,0 +1,45 @@
+# KataGo Analysis Engine Configuration - Human SL Network (CPU)
+# For use with "katago analysis" command with human-style model
+# Based on recommendations from https://katagotraining.org/extra_networks/
+
+# Logging
+logDir = analysis_logs
+logSearchInfo = false
+logAllRequests = false
+logAllResponses = false
+
+# Analysis behavior
+reportAnalysisWinratesAs = SIDETOMOVE
+
+# Human SL specific settings
+# These settings enable human-style move prediction
+# The humanSLProfile can be overridden per-request via overrideSettings
+# Available profiles: preaz_20k to preaz_9d, proyear_1800 to proyear_2023
+humanSLProfile = preaz_5k
+humanSLChosenMoveProp = 0.0
+humanSLChosenMoveIgnorePass = true
+humanSLRootExploreProbWeightless = 0.5
+humanSLCpuctPermanent = 2.0
+
+# Disable uncertainty features for more consistent human-style analysis
+useUncertainty = false
+subtreeValueBiasFactor = 0.0
+useNoisePruning = false
+
+# Threading configuration for CPU (conservative for human model)
+numAnalysisThreads = 1
+numSearchThreadsPerAnalysisThread = 1
+
+# Neural network batching (CPU optimized)
+nnMaxBatchSize = 8
+numNNServerThreadsPerModel = 2
+
+# Default max visits (lower for human model since we care more about policy)
+# Can be overridden per-request
+maxVisits = 100
+
+# Performance tuning for CPU
+nnCacheSizePowerOfTwo = 20  # ~1M cache entries
+
+# Use more symmetries for better policy quality
+rootNumSymmetriesToSample = 8

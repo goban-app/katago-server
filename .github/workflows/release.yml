@@ -110,10 +110,14 @@ jobs:
             platforms: linux/amd64
           - variant: minimal
             platforms: linux/amd64,linux/arm64
+          - variant: human-cpu
+            platforms: linux/amd64,linux/arm64
+          - variant: human-gpu
+            platforms: linux/amd64
 
     steps:
       - name: Free disk space (for GPU build)
-        if: matrix.variant == 'gpu'
+        if: matrix.variant == 'gpu' || matrix.variant == 'human-gpu'
         run: |
           echo "Before cleanup:"
           df -h
@@ -274,14 +278,21 @@ jobs:
 
             This release includes the following Docker images:
 
+            ### Standard KataGo (strongest analysis)
             - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}` or `:latest` (CPU variant - **default**)
             - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-cpu` or `:latest-cpu` (CPU variant - explicit tag)
             - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-gpu` or `:latest-gpu` (GPU/CUDA variant - for NVIDIA GPUs)
+
+            ### Human SL Network (human-style analysis)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-human-cpu` or `:latest-human-cpu` (CPU variant with human model)
+            - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-human-gpu` or `:latest-human-gpu` (GPU variant with human model)
+
+            ### Other variants
             - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-minimal` or `:latest-minimal` (Minimal variant - BYO KataGo)
             - `ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-base` or `:latest-base` (Base variant - binary only)
 
-            CPU, minimal, and base images are available for `linux/amd64` and `linux/arm64` platforms.
-            GPU image is available for `linux/amd64` only (requires NVIDIA CUDA).
+            CPU, minimal, base, and human-cpu images are available for `linux/amd64` and `linux/arm64` platforms.
+            GPU and human-gpu images are available for `linux/amd64` only (requires NVIDIA CUDA).
 
             **Note:** The default image (without suffix) points to the CPU variant. Both `:${{ needs.detect-version-change.outputs.new_version }}` and `:${{ needs.detect-version-change.outputs.new_version }}-cpu` reference the same CPU image.
 
@@ -298,13 +309,17 @@ jobs:
             Or use the Docker images directly:
 
             ```bash
-            # CPU variant
+            # CPU variant (strongest analysis)
             docker pull ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}
             docker run -p 2718:2718 ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}
 
             # GPU variant (requires NVIDIA Container Toolkit)
             docker pull ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-gpu
             docker run --gpus all -p 2718:2718 ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-gpu
+
+            # Human SL GPU variant (human-style analysis)
+            docker pull ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-human-gpu
+            docker run --gpus all -p 2718:2718 ghcr.io/goban-app/katago-server:${{ needs.detect-version-change.outputs.new_version }}-human-gpu
             ```
 
             ## What's Changed

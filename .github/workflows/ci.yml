@@ -129,6 +129,8 @@ jobs:
             platforms: linux/amd64,linux/arm64
           - variant: minimal
             platforms: linux/amd64,linux/arm64
+          - variant: human-cpu
+            platforms: linux/amd64,linux/arm64
 
     steps:
       - name: Checkout repository

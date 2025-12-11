@@ -34,6 +34,12 @@ struct AnalysisQuery {
     include_policy: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     include_pv_visits: Option<bool>,
+    /// Override KataGo search/analysis settings per-request
+    /// Supports all KataGo analysis config options including human SL settings:
+    /// - humanSLProfile: e.g., "preaz_5k", "rank_3d", "proyear_2020"
+    /// - humanSLChosenMoveProp, humanSLRootExploreProbWeightless, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    override_settings: Option<serde_json::Value>,
 }
 
 /// JSON response format from KataGo analysis engine
@@ -540,6 +546,8 @@ impl AnalysisEngine {
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
             include_pv_visits: request.include_pv_visits,
+            // Pass through override settings (e.g., humanSLProfile for human-style analysis)
+            override_settings: request.override_settings.clone(),
         };
 
         self.send_query(&query)?;
