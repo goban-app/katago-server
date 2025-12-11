@@ -34,6 +34,12 @@ struct AnalysisQuery {
     include_policy: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     include_pv_visits: Option<bool>,
+    /// Override KataGo search/analysis settings per-request
+    /// Supports all KataGo analysis config options including human SL settings:
+    /// - humanSLProfile: e.g., "preaz_5k", "rank_3d", "proyear_2020"
+    /// - humanSLChosenMoveProp, humanSLRootExploreProbWeightless, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    override_settings: Option<serde_json::Value>,
 }
 
 /// JSON response format from KataGo analysis engine
@@ -164,11 +170,17 @@ impl AnalysisEngine {
             // Check if process is dead and needs restart
             if !process_alive.load(Ordering::SeqCst) {
                 if restart_count >= MAX_RESTART_ATTEMPTS {
-                    error!("KataGo has failed {} times, giving up on restarts", restart_count);
+                    error!(
+                        "KataGo has failed {} times, giving up on restarts",
+                        restart_count
+                    );
                     continue;
                 }
 
-                warn!("KataGo process died, attempting restart (attempt {})", restart_count + 1);
+                warn!(
+                    "KataGo process died, attempting restart (attempt {})",
+                    restart_count + 1
+                );
                 thread::sleep(Duration::from_secs(RESTART_DELAY_SECS));
 
                 // Clean up old process
@@ -241,7 +253,12 @@ impl AnalysisEngine {
     /// Spawn the KataGo process and return handles to it
     fn spawn_katago_process(
         config: &KatagoConfig,
-    ) -> Result<(Child, ChildStdin, std::process::ChildStdout, std::process::ChildStderr)> {
+    ) -> Result<(
+        Child,
+        ChildStdin,
+        std::process::ChildStdout,
+        std::process::ChildStderr,
+    )> {
         info!("Starting KataGo analysis engine");
         info!(
             "Config: katago={}, model={}, config={}",
@@ -540,6 +557,8 @@ impl AnalysisEngine {
             include_ownership: request.include_ownership,
             include_policy: request.include_policy,
             include_pv_visits: request.include_pv_visits,
+            // Pass through override settings (e.g., humanSLProfile for human-style analysis)
+            override_settings: request.override_settings.clone(),
         };
 
         self.send_query(&query)?;

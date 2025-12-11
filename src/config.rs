@@ -107,7 +107,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert_eq!(config.server.host, "0.0.0.0");
+        assert_eq!(config.server.host, "::");
         assert_eq!(config.server.port, 2718);
         assert_eq!(config.katago.katago_path, "./katago");
         assert_eq!(config.katago.model_path, "./model.bin.gz");
@@ -118,7 +118,7 @@ mod tests {
     #[test]
     fn test_server_config_default() {
         let config = ServerConfig::default();
-        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.host, "::");
         assert_eq!(config.port, 2718);
     }
 
@@ -205,7 +205,7 @@ move_timeout_secs = 15
 model_path = "/custom/model.bin.gz"
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.server.host, "0.0.0.0"); // default
+        assert_eq!(config.server.host, "::"); // default
         assert_eq!(config.server.port, 2718); // default
         assert_eq!(config.katago.model_path, "/custom/model.bin.gz");
         assert_eq!(config.katago.katago_path, "./katago"); // default
