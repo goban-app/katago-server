@@ -6,11 +6,11 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 
-version: 1.4.5
+version: 1.4.6
 
 # This is the version number of the application being deployed.
 # KataGo v1.15.0 required for human-style model support
-appVersion: "1.4.5"
+appVersion: "1.4.6"
 
 
 keywords:
