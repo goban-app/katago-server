@@ -395,14 +395,25 @@ async fn v1_analysis(
 }
 
 #[axum::debug_handler]
-async fn v1_health(State(_engine): State<AppState>) -> impl IntoResponse {
+async fn v1_health(
+    State(engine): State<AppState>,
+) -> std::result::Result<Json<HealthResponse>, (axum::http::StatusCode, Json<HealthResponse>)> {
     use chrono::Utc;
 
-    Json(HealthResponse {
-        status: "healthy".to_string(),
+    let is_alive = engine.is_alive();
+    let status = if is_alive { "healthy" } else { "unhealthy" };
+
+    let response = HealthResponse {
+        status: status.to_string(),
         timestamp: Some(Utc::now().to_rfc3339()),
-        uptime: None, // Would need to track server start time
-    })
+        uptime: None,
+    };
+
+    if is_alive {
+        Ok(Json(response))
+    } else {
+        Err((axum::http::StatusCode::SERVICE_UNAVAILABLE, Json(response)))
+    }
 }
 
 #[axum::debug_handler]

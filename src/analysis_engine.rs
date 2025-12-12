@@ -233,6 +233,7 @@ impl AnalysisEngine {
 
             // Process is alive, send keepalive ping
             let ping = serde_json::json!({
+                "id": "keepalive",
                 "action": "query_version"
             });
 
@@ -430,7 +431,6 @@ impl AnalysisEngine {
     }
 
     /// Check if KataGo process is running
-    #[allow(dead_code)]
     pub fn is_alive(&self) -> bool {
         self.process_alive.load(Ordering::SeqCst)
     }
@@ -667,9 +667,9 @@ impl AnalysisEngine {
     }
 
     pub async fn query_version(&self) -> Result<(String, Option<String>)> {
-        // Note: KataGo 'action' commands must NOT include 'id' field
-        // The response comes back without an id, directly on stdout
+        // KataGo requires an 'id' field for all requests including query_version
         let query = serde_json::json!({
+            "id": "query_version",
             "action": "query_version"
         });
 
