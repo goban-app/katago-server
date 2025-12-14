@@ -555,9 +555,22 @@ impl AnalysisEngine {
             color = if color == "b" { "w" } else { "b" };
         }
 
+        // Convert initial_stones from API format (tuples) to KataGo format (vecs)
+        // API: [("B", "D16"), ("B", "Q4")] -> KataGo: [["B", "D16"], ["B", "Q4"]]
+        let initial_stones: Vec<Vec<String>> = request
+            .initial_stones
+            .as_ref()
+            .map(|stones| {
+                stones
+                    .iter()
+                    .map(|(color, coord)| vec![color.clone(), coord.clone()])
+                    .collect()
+            })
+            .unwrap_or_default();
+
         let query = AnalysisQuery {
             id: request_id.clone(),
-            initial_stones: vec![], // Empty for standard games (could support handicap via API later)
+            initial_stones,
             moves: katago_moves,
             rules: request.rules.clone().unwrap_or_else(|| {
                 // Auto-detect rules from komi
