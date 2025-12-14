@@ -548,8 +548,26 @@ impl AnalysisEngine {
 
         // Convert moves to KataGo format: [["b", "D4"], ["w", "Q16"], ...]
         // Note: KataGo requires lowercase b/w (confirmed by Python implementation and testing)
+        // In handicap games (with initial_stones), White plays first
         let mut katago_moves = Vec::new();
-        let mut color = "b";
+        let has_handicap = request
+            .initial_stones
+            .as_ref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+        // Use initial_player if provided, otherwise infer from handicap
+        let first_player = request
+            .initial_player
+            .as_ref()
+            .map(|p| p.to_lowercase())
+            .unwrap_or_else(|| {
+                if has_handicap {
+                    "w".to_string() // White plays first in handicap games
+                } else {
+                    "b".to_string() // Black plays first normally
+                }
+            });
+        let mut color = first_player.as_str();
         for mv in &request.moves {
             katago_moves.push(vec![color.to_string(), mv.clone()]);
             color = if color == "b" { "w" } else { "b" };
