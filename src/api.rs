@@ -12,6 +12,36 @@ use tracing::error;
 
 pub type AppState = Arc<AnalysisEngine>;
 
+/// A move can be either a simple coordinate or an explicit [color, coordinate] pair
+/// This allows clients to specify exact colors for handicap games where alternation
+/// doesn't match the actual game (e.g., White plays first in handicap games)
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum MoveInput {
+    /// Simple coordinate (e.g., "D4") - color inferred from position/alternation
+    Simple(String),
+    /// Explicit color and coordinate (e.g., ["W", "D4"] or ["B", "Q16"])
+    WithColor([String; 2]),
+}
+
+impl MoveInput {
+    /// Get the coordinate from the move
+    pub fn coord(&self) -> &str {
+        match self {
+            MoveInput::Simple(coord) => coord,
+            MoveInput::WithColor([_, coord]) => coord,
+        }
+    }
+
+    /// Get explicit color if provided, None for simple moves
+    pub fn color(&self) -> Option<&str> {
+        match self {
+            MoveInput::Simple(_) => None,
+            MoveInput::WithColor([color, _]) => Some(color),
+        }
+    }
+}
+
 // ============================================================================
 // New V1 API Types
 // ============================================================================
@@ -21,8 +51,9 @@ pub type AppState = Arc<AnalysisEngine>;
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)] // Some fields reserved for future enhancements
 pub struct AnalysisRequest {
-    /// Moves played so far in coordinate notation (e.g., ["D4", "Q16"])
-    pub moves: Vec<String>,
+    /// Moves played so far - can be simple coordinates (e.g., ["D4", "Q16"]) or
+    /// explicit color pairs (e.g., [["W", "D4"], ["B", "Q16"]]) for handicap games
+    pub moves: Vec<MoveInput>,
 
     /// Game rules: "tromp-taylor", "chinese", "japanese", "korean", "aga", etc.
     #[serde(default)]
@@ -472,11 +503,29 @@ mod tests {
             "includePolicy": false
         }"#;
         let request: AnalysisRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.moves, vec!["D4", "Q16"]);
+        assert_eq!(request.moves.len(), 2);
+        assert_eq!(request.moves[0].coord(), "D4");
+        assert_eq!(request.moves[1].coord(), "Q16");
+        assert!(request.moves[0].color().is_none()); // Simple format
         assert_eq!(request.komi, Some(7.5));
         assert_eq!(request.rules, Some("chinese".to_string()));
         assert_eq!(request.include_ownership, Some(true));
         assert_eq!(request.include_policy, Some(false));
+    }
+
+    #[test]
+    fn test_analysis_request_with_explicit_colors() {
+        let json = r#"{
+            "moves": [["W", "D4"], ["B", "Q16"]],
+            "komi": 0.5,
+            "rules": "chinese"
+        }"#;
+        let request: AnalysisRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.moves.len(), 2);
+        assert_eq!(request.moves[0].coord(), "D4");
+        assert_eq!(request.moves[0].color(), Some("W"));
+        assert_eq!(request.moves[1].coord(), "Q16");
+        assert_eq!(request.moves[1].color(), Some("B"));
     }
 
     #[test]
