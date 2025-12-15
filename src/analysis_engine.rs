@@ -535,10 +535,10 @@ impl AnalysisEngine {
 
         // Validate moves for the given board size
         for mv in &request.moves {
-            if !Self::is_valid_move(mv, request.board_x_size, request.board_y_size) {
+            if !Self::is_valid_move(mv.coord(), request.board_x_size, request.board_y_size) {
                 warn!(
                     "Invalid move '{}' for {}x{} board (valid columns: A-{}, skipping I)",
-                    mv,
+                    mv.coord(),
                     request.board_x_size,
                     request.board_y_size,
                     Self::column_letter_for_size(request.board_x_size)
@@ -548,30 +548,55 @@ impl AnalysisEngine {
 
         // Convert moves to KataGo format: [["b", "D4"], ["w", "Q16"], ...]
         // Note: KataGo requires lowercase b/w (confirmed by Python implementation and testing)
-        // In handicap games (with initial_stones), White plays first
-        let mut katago_moves = Vec::new();
-        let has_handicap = request
-            .initial_stones
-            .as_ref()
-            .map(|s| !s.is_empty())
-            .unwrap_or(false);
-        // Use initial_player if provided, otherwise infer from handicap
-        let first_player = request
-            .initial_player
-            .as_ref()
-            .map(|p| p.to_lowercase())
-            .unwrap_or_else(|| {
-                if has_handicap {
-                    "w".to_string() // White plays first in handicap games
-                } else {
-                    "b".to_string() // Black plays first normally
-                }
-            });
-        let mut color = first_player.as_str();
-        for mv in &request.moves {
-            katago_moves.push(vec![color.to_string(), mv.clone()]);
-            color = if color == "b" { "w" } else { "b" };
-        }
+        //
+        // Moves can be provided in two formats:
+        // 1. Simple: ["D4", "Q16"] - colors inferred from alternation starting with initial_player
+        // 2. Explicit: [["W", "D4"], ["B", "Q16"]] - colors specified directly
+        //
+        // If ANY move has explicit color, we use explicit colors for ALL moves
+        // (mixing formats is not supported)
+        let has_explicit_colors = request.moves.iter().any(|m| m.color().is_some());
+
+        let katago_moves = if has_explicit_colors {
+            // Use explicit colors from the request
+            request
+                .moves
+                .iter()
+                .map(|mv| {
+                    let color = mv
+                        .color()
+                        .expect("mixed move formats not supported")
+                        .to_lowercase();
+                    vec![color, mv.coord().to_string()]
+                })
+                .collect()
+        } else {
+            // Infer colors from alternation
+            let has_handicap = request
+                .initial_stones
+                .as_ref()
+                .map(|s| !s.is_empty())
+                .unwrap_or(false);
+            // Use initial_player if provided, otherwise infer from handicap
+            let first_player = request
+                .initial_player
+                .as_ref()
+                .map(|p| p.to_lowercase())
+                .unwrap_or_else(|| {
+                    if has_handicap {
+                        "w".to_string() // White plays first in handicap games
+                    } else {
+                        "b".to_string() // Black plays first normally
+                    }
+                });
+            let mut color = first_player.as_str();
+            let mut moves = Vec::new();
+            for mv in &request.moves {
+                moves.push(vec![color.to_string(), mv.coord().to_string()]);
+                color = if color == "b" { "w" } else { "b" };
+            }
+            moves
+        };
 
         // Convert initial_stones from API format (tuples) to KataGo format (vecs)
         // API: [("B", "D16"), ("B", "Q4")] -> KataGo: [["B", "D16"], ["B", "Q4"]]
